@@ -63,6 +63,7 @@ export enum DatoFields {
   SeoDescription= 'description',
   AssetMetadata= 'defaultFieldMetadata',
   AllLocalesRequired= 'allLocalesRequired',
+  ItemType="itemType"
 };
 
 /**

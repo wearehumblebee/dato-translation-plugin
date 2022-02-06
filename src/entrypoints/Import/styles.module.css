@@ -1,0 +1,33 @@
+.layoutMain {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.layoutSettings {
+  display: flex;
+  justify-content: center;
+  margin: var(--spacing-xl) 0;
+}
+
+.layoutSettings > div {
+  margin-right: var(--spacing-m);
+}
+
+.layoutSpinner {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--spacing-xl);
+}
+
+.dropdownWrapper {
+  width: 0;
+}
+
+.dropdownWrapper > * {
+  position: absolute !important;
+  right: 100%;
+  width: 15px;
+  top: 0;
+  bottom: 0;
+}

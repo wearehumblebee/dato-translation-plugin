@@ -2,9 +2,9 @@ import { RenderPagePropertiesAndMethods } from 'datocms-plugin-sdk';
 import { useCallback, useMemo, useState } from 'react';
 import { SiteClient } from 'datocms-client';
 import { ExportSettings, ExportData } from '../../types/export';
+import { ImportSettings } from '../../types/import';
 import { FileData, Model, FileRecord } from "../../types/shared";
 import { fetchDataForExport, fetchFieldsForModels } from "../../services/apiService";
-import { parseRecords, parseAssets,formatFileResult } from "../../services/exportService";
 import { createJSONBlob } from '../../helpers/downloadFile';
 import { isExportFileValid } from '../../validation/export';
 import s from './styles.module.css';
@@ -29,11 +29,11 @@ type PropTypes = {
 
 export default function Export({ ctx }: PropTypes) {
 
-  const [settings, setSettings] = useState<ExportSettings>({
-    downloadFile:false,
-    exportOnlyPublishedRecords: false,
-    exportAssets: false,
-    exportContent: true
+  const [settings, setSettings] = useState<ImportSettings>({
+    isTestMode: true,
+    dontCreateRecords:false,
+    createBackupFile:false,
+    downloadLogsOnDone: false,
   });
   const defaultLocale = ctx.site.attributes.locales.length > 0 ? ctx.site.attributes.locales[0] : "";
   const [isLoading, setIsLoading] = useState(false);
@@ -72,31 +72,19 @@ export default function Export({ ctx }: PropTypes) {
   };
 
   const createAndDownloadFile = (data:FileData):void => {
-
-    const fileIsValid = isExportFileValid(data);
-
-    if(fileIsValid){
-      try{
-        const jsonObj = createJSONBlob(data);
-        downloadFile(jsonObj, `export - ${ctx.site.attributes.name}.json`);
-      }catch(err){
-        console.error(err);
-        ctx.customToast({
-          type: 'alert',
-          message:"JSON file could not be created",
-        });
-      }
-
-    }else{
+    try{
+      const jsonObj = createJSONBlob(data);
+      downloadFile(jsonObj, `export - ${ctx.site.attributes.name}.json`);
+    }catch(err){
+      console.error(err);
       ctx.customToast({
-        type: 'warning',
-        message:"Export data is empty",
+        type: 'alert',
+        message:"JSON file could not be created",
       });
     }
-
   }
 
-  const runExport = async() => {
+  const runImport = async() => {
 
     let data:ExportData  = {
       records: [],
@@ -107,7 +95,7 @@ export default function Export({ ctx }: PropTypes) {
     setIsLoading(true);
 
     try{
-      data = await fetchDataForExport(client,settings.exportOnlyPublishedRecords, settings.exportContent, settings.exportAssets);
+      data = await fetchDataForExport(client, false, true, true);
       models = await fetchFieldsForModels(client, ctx.itemTypes);
     }catch(err){
       console.error(err);
@@ -117,18 +105,9 @@ export default function Export({ ctx }: PropTypes) {
 
       let assets : FileRecord[] = [];
 
-      const records = parseRecords(data.records, models,locale );
+      //const records = parseRecords(data.records, models,locale );
 
-      if(settings.exportAssets){
-        assets = parseAssets(data.assets, locale);
-      }
-
-      const result = formatFileResult(records, assets, locale);
-
-      if(settings.downloadFile){
-        createAndDownloadFile(result);
-      }
-      ctx.notice(`${result.fields.length} records have been exported from language: ${result.lang}`)
+      //ctx.notice(`${result.fields.length} records have been exported from language: ${result.lang}`)
     }else{
       ctx.customToast({
         type: 'warning',
@@ -179,7 +158,7 @@ export default function Export({ ctx }: PropTypes) {
                 fullWidth
                 buttonSize="xxs"
                 disabled={isLoading}
-                onClick={runExport}
+                onClick={runImport}
               >
               Run export
             </Button>

@@ -1,10 +1,11 @@
-import { Model,FileRecord,FileData,FileField,FileFieldSpecial,FieldsArray, MediaField, SeoField ,TranslationRecord} from '../types/shared';
+import { Model,TranslationRecord,TranslationData,FileField,FileFieldSpecial,FieldsArray, MediaField, SeoField } from '../types/shared';
 import { Fields, DatoFields, ItemTypes, DatoFieldTypes } from '../helpers/constants';
+import { ReferenceRecord } from "../types/export";
 import { isLinkUrl } from '../helpers/parseHelper';
 import { camelize } from 'humps';
 
-export const parseRecords = (allRecords:Record<string,unknown>[], models:Model[], lang = 'en'):FileRecord[] => {
-  let result:FileRecord[] = [];
+export const parseRecords = (allRecords:Record<string,unknown>[], models:Model[], lang = 'en'):TranslationRecord[] => {
+  let result:TranslationRecord[] = [];
   const data = parseParentRecords(allRecords, models, lang);
 
   // Get modular blocks
@@ -27,10 +28,10 @@ export const parseRecords = (allRecords:Record<string,unknown>[], models:Model[]
 
 };
 
-export const parseParentRecords = (allRecords:Record<string,unknown>[], models:Model[], lang = 'en'):TranslationRecord => {
+export const parseParentRecords = (allRecords:Record<string,unknown>[], models:Model[], lang = 'en'):ReferenceRecord => {
 
   const result = allRecords.reduce(
-    (acc:TranslationRecord, record:Record<string,unknown>) => {
+    (acc:ReferenceRecord, record:Record<string,unknown>) => {
       let model = models.find((x) => x.id === record.itemType);
 
       if (model) {
@@ -56,13 +57,13 @@ export const parseParentRecords = (allRecords:Record<string,unknown>[], models:M
     {
       records : [],
       references: [],
-    } as TranslationRecord,
+    } as ReferenceRecord,
   );
 
   return result;
 };
 
-const parseLinkedRecordsAndModularBlocks = (linkedRecordsAndBlocks:Record<string,unknown>[], models:Model[]) :FileRecord[] => {
+const parseLinkedRecordsAndModularBlocks = (linkedRecordsAndBlocks:Record<string,unknown>[], models:Model[]) :TranslationRecord[] => {
   const result = linkedRecordsAndBlocks.reduce((acc, record) => {
     // These records dont have any localized flags
     const model = models.find((x) => x.id === record.type);
@@ -74,7 +75,7 @@ const parseLinkedRecordsAndModularBlocks = (linkedRecordsAndBlocks:Record<string
     }
 
     return acc;
-  }, [] as FileRecord[]);
+  }, [] as TranslationRecord[]);
 
   return result;
 };
@@ -87,7 +88,7 @@ const parseLinkedRecordsAndModularBlocks = (linkedRecordsAndBlocks:Record<string
  * @param {array} translatableLinkedRecords
  * @return {array}
  */
-const findLinkedRecordsAndBlocks = (transResult:FileRecord[], records:Record<string,unknown>[], references:string[]):Record<string,unknown>[] => {
+const findLinkedRecordsAndBlocks = (transResult:TranslationRecord[], records:Record<string,unknown>[], references:string[]):Record<string,unknown>[] => {
   let result:Record<string,unknown>[] = [];
   if (references.length > 0) {
     const translatableRecords = getTranslatableLinkFromArray(records, references);
@@ -130,7 +131,7 @@ const getTranslatableLinkFromArray = (records:Record<string,unknown>[], referenc
  * @param {array} translatableRecords List of record id:s found in array props on parent records
  * @return {array}
  */
-const removeAlreadyAddedRecords = (result:FileRecord[], translatableRecords:Record<string,unknown>[]):Record<string,unknown>[] => {
+const removeAlreadyAddedRecords = (result:TranslationRecord[], translatableRecords:Record<string,unknown>[]):Record<string,unknown>[] => {
   const newResult = translatableRecords.reduce((acc, record) => {
     const translatedRecord = result.find((x) => x.id === record.id);
     if (!translatedRecord) {
@@ -143,7 +144,7 @@ const removeAlreadyAddedRecords = (result:FileRecord[], translatableRecords:Reco
   return newResult;
 };
 
-const createModularBlock = (record:Record<string,unknown>, model:Model):FileRecord | null => {
+const createModularBlock = (record:Record<string,unknown>, model:Model):TranslationRecord | null => {
 
   const result = model.fieldsReference.reduce((acc, fieldId) => {
     const currentField = model.fields.find((field) => field.id === fieldId);
@@ -183,7 +184,7 @@ const createModularBlock = (record:Record<string,unknown>, model:Model):FileReco
  * @param {string} lang "en"
  * @return { object | null }
  */
-const createRecord = (record:Record<string,unknown>, model:Model, lang:string): {data: FileRecord, references:string[]} | null => {
+const createRecord = (record:Record<string,unknown>, model:Model, lang:string): {data: TranslationRecord, references:string[]} | null => {
   // Array holding id:s of modular blocks and linked array records
   let referenceIdArray:string[] = [];
 
@@ -299,7 +300,7 @@ const createFieldHelper = (fieldType:string, key:string, value:unknown, hint:str
  * @param {string} lang source language to translate from
  * @return {array}
  */
-export const parseAssets = (assets:Record<string,unknown>[], lang = 'en'):FileRecord[] => {
+export const parseAssets = (assets:Record<string,unknown>[], lang = 'en'):TranslationRecord[] => {
 
   // We dont care about the asset type (image, video, document), we are only interested in the meta data object
   const result = assets.reduce((acc, asset:Record<string,unknown>) => {
@@ -318,7 +319,7 @@ export const parseAssets = (assets:Record<string,unknown>[], lang = 'en'):FileRe
     }
 
     return acc;
-  }, [] as FileRecord[]);
+  }, [] as TranslationRecord[]);
 
   return result;
 
@@ -425,8 +426,8 @@ const createSpecialField = ({key, hint,fields}:createSpecialFieldArgs) : FileFie
  * @param {array} assets
  * @return {object}
  */
-export const formatFileResult = (records:FileRecord[], assets:FileRecord[], lang :string):FileData => {
-  let result:FileRecord[] = [];
+export const formatFileResult = (records:TranslationRecord[], assets:TranslationRecord[], lang :string):TranslationData => {
+  let result:TranslationRecord[] = [];
   if(assets.length > 0){
     result = [...records, ...assets];
   }else{
@@ -446,14 +447,14 @@ export const formatFileResult = (records:FileRecord[], assets:FileRecord[], lang
  * @param {items} Optional init items
  * @return {object} { id: "434344", itemType: "123456", fields: []}
  */
-const createDefaultRecord = (record:Record<string,unknown>, model:Model, items:FieldsArray):FileRecord => {
+const createDefaultRecord = (record:Record<string,unknown>, model:Model, items:FieldsArray):TranslationRecord => {
 
   const defaultRecord = {
     id: record.id,
     itemType: model.id,
     modelName: model.name,
     hint: model.hint || '',
-  } as FileRecord
+  } as TranslationRecord
 
   if(items.length > 0){
     defaultRecord.fields = items;
@@ -467,12 +468,12 @@ const createDefaultRecord = (record:Record<string,unknown>, model:Model, items:F
  * @param {items} Optional init items
  * @return {object} { id: "434344", itemType: "123456", fields: []}
  */
-export const constructDefaultAssetRecord = (record:Record<string,unknown>, items:FileField[]):FileRecord => {
+export const constructDefaultAssetRecord = (record:Record<string,unknown>, items:FileField[]):TranslationRecord => {
   return {
     id: record.id,
     // Assets dont have itemType (model id), using this to differentiate records from assets
     itemType: ItemTypes.Media,
     modelName: '',
     fields: items && items.length > 0 ? items : [],
-  } as FileRecord
+  } as TranslationRecord
 };

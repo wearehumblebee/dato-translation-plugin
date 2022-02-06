@@ -1,3 +1,5 @@
+import { TranslationRecord } from "./shared"
+
 export type ExportSettings = {
   downloadFile: boolean,
   exportOnlyPublishedRecords: boolean,
@@ -9,4 +11,9 @@ export type ExportSettings = {
 export type ExportData = {
   records: Record<string,unknown>[],
   assets: Record<string,unknown>[]
+}
+
+export type ReferenceRecord = {
+  records: TranslationRecord[],
+  references: string[]
 }

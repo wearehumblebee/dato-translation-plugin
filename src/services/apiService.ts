@@ -1,5 +1,5 @@
 import {  ModelBlock } from 'datocms-plugin-sdk';
-import { ExportSettings, ExportData } from "../types/export";
+import { ExportData } from "../types/export";
 import { Model, Field } from '../types/shared';
 import { fetchRecords, fetchAssets } from "../api/queries";
 import { camelize } from 'humps';
@@ -14,24 +14,24 @@ import { camelize } from 'humps';
  * @param {object} settings
  * @returns
  */
- export const fetchDataForExport = async ( client: any, settings:ExportSettings ):Promise<ExportData> => {
+ export const fetchDataForExport = async ( client: any, fetchOnlyPublishedRecords:boolean, fetchContentData:boolean, fetchAssetsData:boolean ):Promise<ExportData> => {
 
   let promises : Promise<Record<string,unknown>[]>[] = [];
-  if (settings.exportContent) {
-    promises.push(fetchRecords(client, settings.exportOnlyPublishedRecords));
+  if (fetchContentData) {
+    promises.push(fetchRecords(client, fetchOnlyPublishedRecords));
   }
 
-  if (settings.exportAssets) {
+  if (fetchAssetsData) {
     promises.push(fetchAssets(client));
   }
 
-  if(settings.exportContent && settings.exportAssets){
+  if(fetchContentData && fetchAssetsData){
     const [records, assets] = await Promise.all(promises);
     return {
       records,
       assets
     }
-  }else if(settings.exportContent && !settings.exportAssets){
+  }else if(fetchContentData && !fetchAssetsData){
     const [ data ] = await Promise.all(promises);
     return {
       records:data,

@@ -16,7 +16,7 @@ export const isNumericString = (value:string):boolean => {
  * @param {object*} obj
  * @returns {boolean}
  */
-export const isObjectEmpty = (obj:object):boolean => {
+export const isObjectEmpty = (obj:object | Record<string,unknown> | null | undefined):boolean => {
   if (!obj) {
     return true;
   }

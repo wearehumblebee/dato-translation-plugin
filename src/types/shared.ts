@@ -33,58 +33,41 @@ export type ModularBlock = {
     },
 };
 
-// Ugly merged types
-
-export type TranslationRecord = {
-  records: FileRecord[],
-  references: string[]
-}
-
 // Types used in actual export file
 
-export type FileData = {
+export type TranslationData = {
   lang: string;
-  fields: FileRecord[] // I think
+  fields: TranslationRecord[] // I think
 }
 
-interface FileFieldBase {
+export type FieldsArray = Array<TranslationField | TranslationFieldSpecial>;
+
+export type TranslationRecord = {
+  id:string;
+  itemType:string;
+  modelName: string; // TODO should this be name ???
+  hint:string;
+  fields?: FieldsArray;
+}
+
+interface TranslationFieldBase {
   fieldName:string;
   hint:string;
   type?: "reference" | undefined; // have to get rid of this guy
 }
 
-export interface FileField extends FileFieldBase {
+export interface TranslationField extends TranslationFieldBase {
   value:unknown;
 }
 
-// TODO remove me
-export type FileFieldOLD = {
-  fieldName:string;
-  value: unknown;
-  hint: string | null;
-  type?: "reference" | undefined;
-  fields?: FileField[];
-}
-
 // File (Media) and Seo are special shapes that sits directly on a record
-export interface FileFieldSpecial extends FileFieldBase {
-  fields: FileField[]
+export interface TranslationFieldSpecial extends TranslationFieldBase {
+  fields: TranslationField[]
 }
 
 export type MediaField = {
   alt: string;
   title: string;
-}
-
-export type FieldsArray = Array<FileField | FileFieldSpecial>;
-
-export type FileRecord = {
-  id:string;
-  itemType:string;
-  modelName: string;
-  hint:string;
-  fields?: FieldsArray;
-  //fields:FileField[]
 }
 
 export type SeoField = {
