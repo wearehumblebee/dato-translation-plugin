@@ -1,10 +1,14 @@
 import { Field, FieldsArray } from './shared';
 
 export type ImportSettings = {
-  isTestMode: boolean,
+  isDryRun: boolean,
   dontCreateRecords: boolean,
   createBackupFile: boolean,
-  downloadLogsOnDone: boolean,
+}
+
+export type TranslationRefs = {
+  records: TranslationRecord[],
+  assets: TranslationRecord[]
 }
 
 /**
@@ -13,7 +17,7 @@ export type ImportSettings = {
 export type TranslationRecord = {
   id:string;
   itemType:string;
-  name: string; // TODO : called modelName in export is this right?
+  modelName: string; // TODO : called modelName in export is this right?
   hint:string;
   fields: FieldsArray;
 }
@@ -44,4 +48,9 @@ export type LinkRecordRef = {
 export type RecordsAndBlocks = {
   records: CreateRecordRef[],
   modularBlocks: CreateRecordRef[]
+}
+
+export type CreatedRecord = {
+  newRecord: Record<string,unknown>,
+  reference: CreateRecordRef
 }

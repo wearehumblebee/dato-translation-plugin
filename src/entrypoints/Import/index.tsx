@@ -1,23 +1,24 @@
 import { RenderPagePropertiesAndMethods } from 'datocms-plugin-sdk';
 import { useCallback, useMemo, useState } from 'react';
 import { SiteClient } from 'datocms-client';
-import { ExportSettings, ExportData } from '../../types/export';
-import { ImportSettings } from '../../types/import';
-import { FileData, Model, FileRecord } from "../../types/shared";
-import { fetchDataForExport, fetchFieldsForModels } from "../../services/apiService";
-import { createJSONBlob } from '../../helpers/downloadFile';
-import { isExportFileValid } from '../../validation/export';
+import { ImportSettings, TranslationRefs } from '../../types/import';
+import {  TranslationData ,ReferenceData, CustomToast} from "../../types/shared";
+import { LogSummary, LogStatus, LogType } from '../../types/logger';
+import { fetchDataForExport, fetchFieldsForModels, publishAllRecords } from "../../services/apiService";
+import { downloadFile } from '../../helpers/fileHandling';
+import { isImportInvalid } from '../../validation/validate';
+import { importRecords,importAssets, splitTranslationTypes } from "../../services/importService";
+import SummaryTable from "../../components/SummaryTable";
+import FileUpload from "../../components/FileUpload";
+import Locales from "../../components/Locales";
+import LocaleSelector from '../../components/LocaleSelector';
+import Logger from "../../helpers/logger";
 import s from './styles.module.css';
 import {
   Canvas,
   Toolbar,
   ToolbarStack,
   ToolbarTitle,
-  Dropdown,
-  DropdownOption,
-  DropdownMenu,
-  CaretUpIcon,
-  CaretDownIcon,
   SwitchField,
   Spinner,
   Button,
@@ -27,17 +28,20 @@ type PropTypes = {
   ctx: RenderPagePropertiesAndMethods;
 };
 
-export default function Export({ ctx }: PropTypes) {
+export default function Import({ ctx }: PropTypes) {
 
   const [settings, setSettings] = useState<ImportSettings>({
-    isTestMode: true,
+    isDryRun: true,
     dontCreateRecords:false,
     createBackupFile:false,
-    downloadLogsOnDone: false,
   });
   const defaultLocale = ctx.site.attributes.locales.length > 0 ? ctx.site.attributes.locales[0] : "";
   const [isLoading, setIsLoading] = useState(false);
-  const [locale, setLocale] = useState(defaultLocale);
+  const [sourceLocale, setSourceLocale] = useState<string>(defaultLocale);
+  const [targetLocale, setTargetLocale] = useState<string>();
+  const [summary, setSummary] = useState<LogSummary | undefined>(undefined);
+
+  const [translationFile, setTranslationFile] = useState<TranslationData | undefined>();
 
   const client = useMemo(
     () =>
@@ -57,63 +61,148 @@ export default function Export({ ctx }: PropTypes) {
 
   const changeLang = useCallback(
     (locale: string) => {
-      setLocale(locale);
+      setSourceLocale(locale);
     },
     [],
   );
 
-  const downloadFile = (blob:Blob, fileName:string):void => {
-    const dataUri = URL.createObjectURL(blob);
+  const publishAllClick = async() => {
+    setIsLoading(true);
+    let isError = false;
+    let publishedCount = 0;
+    try {
+      publishedCount = await publishAllRecords(client, settings.isDryRun);
+    }catch(error){
+      console.error(error);
+      isError = true;
+    }
+    setIsLoading(false);
 
-    let linkElement = document.createElement('a');
-    linkElement.setAttribute('href', dataUri);
-    linkElement.setAttribute('download', fileName);
-    linkElement.click();
-  };
-
-  const createAndDownloadFile = (data:FileData):void => {
-    try{
-      const jsonObj = createJSONBlob(data);
-      downloadFile(jsonObj, `export - ${ctx.site.attributes.name}.json`);
-    }catch(err){
-      console.error(err);
+    if(isError){
       ctx.customToast({
-        type: 'alert',
-        message:"JSON file could not be created",
+        type:"alert",
+        message:"Could not publish records"
+      });
+    }else{
+      ctx.customToast({
+        type:"notice",
+        message:`${publishedCount} records have been published`
       });
     }
   }
 
-  const runImport = async() => {
+  const downloadHelper = (data:any, fileNamePrefix:string):void => {
+    const fileName = `${fileNamePrefix}-${ctx.site.attributes.name}`
+    downloadFile(data, fileName);
+  };
 
-    let data:ExportData  = {
-      records: [],
-      assets: []
+  const uploadFile = (e:React.ChangeEvent<HTMLInputElement>) => {
+
+    if(e.target.files && e.target.files?.length > 0){
+      const reader = new FileReader();
+
+      reader.readAsText(e.target.files[0], 'UTF-8');
+
+      reader.onload = async () => {
+        if(reader.result){
+          const result = await JSON.parse(reader.result as string);
+
+          const validationError = isImportInvalid(result, sourceLocale, ctx.site.attributes.locales);
+          if(!validationError){
+            setTranslationFile(result);
+            setTargetLocale(result.lang);
+          }else{
+            ctx.customToast(validationError);
+          }
+
+        }else{
+          ctx.customToast({
+            type:"warning",
+            message:"Error parsing the translation file"
+          });
+        }
+      };
+
+      reader.onerror = () => {
+        console.log(reader.error);
+        ctx.customToast({
+          type:"warning",
+          message:"Error reading the translation file"
+        });
+      }
     }
-    let models:Model[] = [];
+  };
+
+  const fetcReferenceData = async():Promise<ReferenceData> => {
+    const data = await fetchDataForExport(client, false, true, true);
+    data.models = await fetchFieldsForModels(client, ctx.itemTypes);
+    return data;
+  }
+
+  const startImport = async(sourceLang:string, targetLang:string, translations:TranslationRefs, logger:Logger) :Promise<CustomToast>=> {
+
+    let data:ReferenceData | undefined = undefined;
+    let toast: CustomToast | undefined = undefined;
+
+    try{
+      data = await fetcReferenceData();
+    }catch(error){
+      logger.log({context:"fetcReferenceData",status:LogStatus.Error, type:LogType.Other, error:error as Record<string,unknown>})
+      console.error(error);
+    }
+
+    if(data && (data.records.length > 0 || data.assets.length > 0) && data.models.length > 0){
+
+      if(settings.createBackupFile){
+        // Download current state of content
+        downloadHelper(data, "backup")
+      }
+
+      await importRecords({client, records: data.records, models:data.models,translations: translations.records, sourceLang,targetLang, isDryRun:settings.isDryRun, dontCreateRecords:settings.dontCreateRecords, logger});
+      await importAssets({client, records:data.assets, translations: translations.assets, sourceLang, targetLang, logger, isDryRun:settings.isDryRun});
+
+      toast = {
+        type: "notice",
+        message: "Import is done"
+      };
+    }else{
+      toast = {
+        type: 'alert',
+        message:"Could not fetch reference data from DatoCMS, aborting",
+      }
+    }
+    return toast;
+  }
+
+  const initImport = async() => {
 
     setIsLoading(true);
 
-    try{
-      data = await fetchDataForExport(client, false, true, true);
-      models = await fetchFieldsForModels(client, ctx.itemTypes);
-    }catch(err){
-      console.error(err);
+    const file = translationFile as TranslationData;
+
+    // Validating again if user has changed source lang after uploading file
+    const validationError = isImportInvalid(file, sourceLocale,ctx.site.attributes.locales)
+
+    if(validationError){
+      ctx.customToast(validationError);
+      setIsLoading(false);
+      return;
     }
 
-    if(data && (data.records.length > 0 || data.assets.length > 0) && models.length > 0){
+    // Take source and target lang from locale
+    const sourceLang = sourceLocale;
+    const targetLang = targetLocale as string;
 
-      let assets : FileRecord[] = [];
+    const logger = new Logger(sourceLang, targetLang, Logger.LogMode.Import, settings.isDryRun);
 
-      //const records = parseRecords(data.records, models,locale );
+    // file has been validated above
+    const translations = splitTranslationTypes(file);
 
-      //ctx.notice(`${result.fields.length} records have been exported from language: ${result.lang}`)
-    }else{
-      ctx.customToast({
-        type: 'warning',
-        message:"Could not fetch reference data from DatoCMS, aborting",
-      });
-    }
+    const toast = await startImport(sourceLang, targetLang, translations,logger);
+
+    setSummary(logger.getLogSummary);
+
+    ctx.customToast(toast);
     setIsLoading(false);
 
   }
@@ -124,49 +213,50 @@ export default function Export({ ctx }: PropTypes) {
           <div className={s['layoutMain']}>
             <Toolbar>
               <ToolbarStack stackSize="l">
-                <ToolbarTitle>{`Export data (${locale})`}</ToolbarTitle>
-                <Dropdown
-                renderTrigger={({ open, onClick }) => (
+                <ToolbarTitle>{`Import data`}</ToolbarTitle>
+                <div>
                   <Button
-                    onClick={onClick}
-                    rightIcon={open ? <CaretUpIcon /> : <CaretDownIcon />}
+                    type="button"
+                    buttonType='primary'
+                    buttonSize="s"
+                    disabled={isLoading}
+                    onClick={publishAllClick}
                   >
-                    Select locale
-                    </Button>
-                )}
-              >
-                <DropdownMenu>
-                  {ctx.site.attributes.locales.map((locale, i) => {
-                    return (
-                      <DropdownOption key={`locale-option-${i}`} onClick={() => changeLang(locale)}>{locale}</DropdownOption>
-                    )
-                  })}
-                </DropdownMenu>
-              </Dropdown>
+                  Publish everything
+                </Button>
+              </div>
               </ToolbarStack>
             </Toolbar>
-
               <div className={s['layoutSettings']}>
-                <SwitchField id="downloadFile" name="downloadFile" label="Download export file" hint="" onChange={updateSettings.bind(null, 'downloadFile')} value={settings.downloadFile} />
-                <SwitchField id="exportContent" name="exportContent" label="Export content" hint="" onChange={updateSettings.bind(null, 'exportContent')} value={settings.exportContent} />
-                <SwitchField id="exportAssets" name="exportAssets" label="Export assets" hint="" onChange={updateSettings.bind(null, 'exportAssets')} value={settings.exportAssets} />
-                <SwitchField id="exportOnlyPublishedRecords" name="exportOnlyPublishedRecords" label="Export only published" hint="" onChange={updateSettings.bind(null, 'exportOnlyPublishedRecords')} value={settings.exportOnlyPublishedRecords} />
+              <SwitchField id="isDryRun" name="isDryRun" label="Dry run" hint="" onChange={updateSettings.bind(null, 'isDryRun')} value={settings.isDryRun} />
+                <SwitchField id="dontCreateRecords" name="dontCreateRecords" label="Dont create records" hint="" onChange={updateSettings.bind(null, 'dontCreateRecords')} value={settings.dontCreateRecords} />
+                <SwitchField id="createBackupFile" name="createBackupFile" label="Create backup file" hint="" onChange={updateSettings.bind(null, 'createBackupFile')} value={settings.createBackupFile} />
               </div>
 
-              <Button
-                type="button"
-                fullWidth
-                buttonSize="xxs"
-                disabled={isLoading}
-                onClick={runImport}
-              >
-              Run export
-            </Button>
+              <FileUpload uploadFile={uploadFile} isDisabled={isLoading} label="Upload translation file"/>
+
+              <Locales sourceLocale={sourceLocale} targetLocale={targetLocale} locales={ctx.site.attributes.locales} changeSourceLocale={changeLang} selectedSourceLocale={sourceLocale}/>
+
+              <div className={s['buttonWrapper']}>
+                <Button
+                  type="button"
+                  buttonType='primary'
+                  buttonSize="l"
+                  disabled={isLoading || !translationFile}
+                  onClick={initImport}
+                >
+                Import data
+              </Button>
+              </div>
 
             {isLoading && (
               <div className={s['layoutSpinner']}>
                 <Spinner/>
               </div>
+            )}
+
+            {summary && !isLoading && (
+              <SummaryTable summary={summary} onDownloadClick={downloadHelper}/>
             )}
 
           </div>

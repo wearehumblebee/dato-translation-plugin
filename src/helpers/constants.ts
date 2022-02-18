@@ -63,7 +63,9 @@ export enum DatoFields {
   SeoDescription= 'description',
   AssetMetadata= 'defaultFieldMetadata',
   AllLocalesRequired= 'allLocalesRequired',
-  ItemType="itemType"
+  ItemType="itemType",
+  Status= 'status', // record, on meta object describing published status of record
+  Meta= 'meta', // record, object with meta data
 };
 
 /**

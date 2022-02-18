@@ -1,8 +1,13 @@
 import {  ModelBlock } from 'datocms-plugin-sdk';
-import { ExportData } from "../types/export";
-import { Model, Field } from '../types/shared';
+import { Model, ReferenceData } from '../types/shared';
+import { CreatedRecord } from '../types/import';
 import { fetchRecords, fetchAssets } from "../api/queries";
+import { LogType, LogStatus} from './../types/logger';
+import { CreateRecordsArgs,UpdateRecordsArgs } from "./interfaces";
+import { createRecord, updateRecord, updateAsset, fetchFields, bulkPublishRecords } from "../api/queries";
+import { DatoFields } from '../helpers/constants';
 import { camelize } from 'humps';
+
 /**
  * Business logic service for api.
  *
@@ -14,7 +19,7 @@ import { camelize } from 'humps';
  * @param {object} settings
  * @returns
  */
- export const fetchDataForExport = async ( client: any, fetchOnlyPublishedRecords:boolean, fetchContentData:boolean, fetchAssetsData:boolean ):Promise<ExportData> => {
+ export const fetchDataForExport = async ( client: any, fetchOnlyPublishedRecords:boolean, fetchContentData:boolean, fetchAssetsData:boolean ):Promise<ReferenceData> => {
 
   let promises : Promise<Record<string,unknown>[]>[] = [];
   if (fetchContentData) {
@@ -29,32 +34,31 @@ import { camelize } from 'humps';
     const [records, assets] = await Promise.all(promises);
     return {
       records,
-      assets
+      assets,
+      models:[]
     }
   }else if(fetchContentData && !fetchAssetsData){
     const [ data ] = await Promise.all(promises);
     return {
       records:data,
-      assets: []
+      assets: [],
+      models:[]
     }
   }else{
     const [ data ] = await Promise.all(promises);
     return {
       records:[],
-      assets: data
+      assets: data,
+      models:[]
     }
   }
 };
 
 export const fetchFieldsForModels = async(client: any, itemTypes: Partial<Record<string,ModelBlock>>) : Promise<Model[]> => {
 
-  //let promises : Promise<Field[]>[] = [];
-
   let models : Model[] = [];
 
   for (const [modelId, data] of Object.entries(itemTypes)) {
-
-    //promises.push(fetchFields(client, modelId));
     const fields = await fetchFields(client, modelId);
 
     const fieldsReferences = data?.relationships.fields.data.map(x => x.id);
@@ -79,9 +83,93 @@ export const fetchFieldsForModels = async(client: any, itemTypes: Partial<Record
 
 }
 
-const fetchFields = async(client: any, modelId: string):Promise<Field[]> => {
-  let fields : Field[] = [];
-  fields = client.fields.all(modelId);
+export const createRecords = async ({client, records,logger, isDryRun }:CreateRecordsArgs):Promise<CreatedRecord[]> => {
+  const context = "createRecords";
+  const createdRecords:CreatedRecord[] = [];
 
-  return fields;
+  for(let i = 0,len=records.length;i < len;i++){
+    let newRecord;
+
+    try{
+      newRecord = await createRecord(client, records[i], isDryRun);
+      logger.log({context,status:LogStatus.Ok,type:LogType.Create })
+    }catch(error){
+      console.error(error);
+      logger.log({context,status:LogStatus.Error,type:LogType.Create, error:error as Record<string,unknown>, item:records[i]});
+    }
+
+    if (newRecord) {
+      createdRecords.push({
+        newRecord,
+        reference: records[i],
+      })
+    }
+  }
+
+  return createdRecords;
+};
+
+export const updateRecords = async ({ client, records, logger, isDryRun}:UpdateRecordsArgs ):Promise<void> => {
+  const context = 'updateRecords';
+
+  for(let i=0,len=records.length;i < len; i++){
+    try{
+      await updateRecord(client, records[i],isDryRun);
+      logger.log({context,status:LogStatus.Ok,type:LogType.Update })
+    }catch(error){
+      console.error(error);
+      logger.log({context,status:LogStatus.Error,type:LogType.Update, error:error as Record<string,unknown>, item:records[i]});
+    }
+  }
+};
+
+export const updateAssets = async ({ client, records,logger, isDryRun}:UpdateRecordsArgs ):Promise<void> => {
+  const context = 'updateAssets';
+
+  for(let i=0,len=records.length;i<len;i++){
+    try{
+      await updateAsset(client, records[i], isDryRun);
+      logger.log({context,status:LogStatus.Ok,type:LogType.UpdateAsset })
+    }catch(error){
+      console.error(error);
+      logger.log({context,status:LogStatus.Error,type:LogType.UpdateAsset, item:records[i], error: error as Record<string,unknown> })
+    }
+  }
+};
+
+export const publishAllRecords = async(client:any, isDryRun:boolean) :Promise<number> => {
+
+
+  const records = await fetchRecords(client, false);
+
+  if(records.length > 0){
+    const result = filterNonPublishableRecords(records);
+    if(result.length > 0){
+      if(isDryRun){
+        return result.length;
+      }else{
+
+        await bulkPublishRecords(client, result);
+        return result.length;
+      }
+    }
+  }
+  return 0;
+}
+
+const filterNonPublishableRecords = (records:Record<string,unknown>[]):string[] => {
+  return records.reduce((acc, record) => {
+    // modular blocks cant be published
+    // modular blocks does not have creator field
+    if (record.hasOwnProperty(DatoFields.Creator)) {
+      const metaField = record[DatoFields.Meta] as Record<string,unknown>;
+
+      if(metaField){
+        if(metaField[DatoFields.Status] !== "published"){
+          acc.push(record.id as string);
+        }
+      }
+    }
+    return acc;
+  }, [] as string[])
 }

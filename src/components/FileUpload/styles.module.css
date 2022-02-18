@@ -1,0 +1,14 @@
+.uploadWrapper {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  padding: var(--spacing-l) 0;
+}
+input {
+  font-size: 100px;
+  position: absolute;
+  left: 0;
+  top: 0;
+  opacity: 0;
+}

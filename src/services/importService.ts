@@ -1,42 +1,94 @@
-import { UpdateRecordRef } from './../types/import';
-import {  DatoFieldTypes, DatoFields, ItemTypes, Fields } from '../helpers/constants';
-import { Model,Field,TranslationData,TranslationField,TranslationFieldSpecial,FieldsArray, MediaField, SeoField } from '../types/shared';
-import { LinkRecordRef,CreateRecordRef,UpdateRecordRef, RecordsAndBlocks ,TranslationRecord} from "../types/import";
+import {  DatoFieldTypes, DatoFields, ItemTypes } from '../helpers/constants';
+import { Model,Field,TranslationData,TranslationField,TranslationFieldSpecial } from '../types/shared';
+import { LinkRecordRef,CreateRecordRef,UpdateRecordRef, RecordsAndBlocks ,TranslationRecord, CreatedRecord, TranslationRefs } from "../types/import";
 import {
   isNumericString,
   isObjectEmpty,
   objectifyFields,
   buildModularBlockHelper,
 } from '../helpers/parseHelper';
+import { ImportRecordsArgs, ImportAssetsArgs } from "../services/interfaces";
+import { createRecords, updateRecords, updateAssets } from "../services/apiService";
+import Logger from "../helpers/logger";
+import { LogType, LogStatus } from '../types/logger';
 import { camelize, decamelize } from 'humps';
+
+export const importRecords = async({client, records, models, translations,sourceLang, targetLang, logger, isDryRun, dontCreateRecords}:ImportRecordsArgs) => {
+  let result : UpdateRecordRef[];
+
+  // Merge existing "regular fields" translations from DatoCMS with new translations from file
+  const mergedTranslations = mergeRecordTranslations(records, models, translations, logger, sourceLang, targetLang);
+
+  console.log({mergedTranslations});
+
+  const createData = findRecordsAndBlocksToCreate(records, models, translations, sourceLang);
+
+  console.log({createData});
+
+  // Merge existing modular block translations from DatoCMS with new translations from file
+  const mergedWithModularBlocks = mergeModularBlocks( mergedTranslations, createData.modularBlocks, targetLang);
+
+  console.log({mergedWithModularBlocks});
+
+if(!dontCreateRecords){
+  // createData.records may contain duplicates where the same record (link) is used in multiple places
+  const recordsToCreate = flattenAndDeDuplicate(createData.records);
+
+  console.log({recordsToCreate});
+
+  // Calls DatoCMS and creates new records
+  const createdRecords = await createRecords({client, records: recordsToCreate, logger, isDryRun});
+  console.log({createdRecords});
+
+  // Merge newly created record id:s to our reference list of records
+  const mergedCreatedRecords = mergeNewRecords(createdRecords,createData.records);
+  console.log({mergedCreatedRecords});
+
+  // Merge existing record links translations from DatoCMS with newly created records
+  result = mergeCreatedRecords(mergedWithModularBlocks,mergedCreatedRecords, targetLang);
+  console.log({result});
+ }else{
+   // If an import is run without creating records "mergedWithModularBlocks" is the final result
+   // This could be useful if you want to run an import a second time for some reason and the second run would create duplicates of created records
+    result = mergedWithModularBlocks;
+ }
+ await updateRecords({client, records: result, logger, isDryRun});
+
+}
+
+export const importAssets = async({client, records, translations,sourceLang, targetLang, logger, isDryRun}:ImportAssetsArgs) => {
+  const mergedAssets = mergeAssetsToUpdate(records, translations, sourceLang, targetLang);
+  await updateAssets({client, records:mergedAssets, logger, isDryRun})
+}
 
 export const mergeRecordTranslations = (
   records: Record<string,unknown>[],
   models:Model[],
   translations: TranslationRecord[],
+  logger:Logger,
   sourceLang:string,
   targetLang:string,
 ):UpdateRecordRef[] => {
   const result = records.reduce((acc, record) => {
+
     let model = models.find((x) => x.id === record.itemType);
 
-    if (model && model.allLocalesRequired) {
+    if (model && model.allLocalesRequired && !model.modularBlock) {
       const translation = translations.find((item) => item.id === record.id);
 
       if (translation) {
-        if (!model.modularBlock) {
           // Regular record
           const updateRecord = mergeUpdateRecord(
             record,
             translation,
             model.fields,
+            logger,
             targetLang,
             sourceLang,
           );
           if (updateRecord) {
             acc.push(updateRecord);
           }
-        }
       }
     }
     return acc;
@@ -52,7 +104,13 @@ export const mergeRecordTranslations = (
  * @param {array} modularBlocks
  * @returns {object} { lang:string, fields:array }
  */
-export const mergeModularBlocks = ( mergedTranslations:UpdateRecordRef[], modularBlocks:CreateRecordRef[] ) => {
+export const mergeModularBlocks = ( mergedTranslations:UpdateRecordRef[], modularBlocks:CreateRecordRef[], targetLang:string ):UpdateRecordRef[] => {
+
+  // Merging existing block represented by id:s for blocks with new blocks. Ex:
+  // {
+  //   en: [ "25326879", "25326880" ], // Old translations in "en"
+  //   sv: [] // We are merging in new blocks here
+  // }
 
   const result = modularBlocks.reduce((acc, block) => {
     const record = mergedTranslations.find((x) => x.id === block.parentRecord.id);
@@ -67,7 +125,10 @@ export const mergeModularBlocks = ( mergedTranslations:UpdateRecordRef[], modula
           ...record,
           data: {
             ...record.data,
-            [key]: preparedBlocks,
+            [key]: {
+              ...block.parentRecord[key] as Record<string,string[]>,
+              [targetLang]: preparedBlocks
+            }
           },
         });
       }
@@ -76,40 +137,37 @@ export const mergeModularBlocks = ( mergedTranslations:UpdateRecordRef[], modula
     return acc;
   }, [] as UpdateRecordRef[]);
 
-  const upgradedRecords = mergeRecordsForUpdate(mergedTranslations, result);
-
-  return {
-    ...mergedTranslations,
-    [Fields.Items]: upgradedRecords,
-  };
+  return mergeRecordsForUpdate(mergedTranslations, result);
 };
 
-export const mergeCreatedRecords = ( mergedTranslations, mergedCreatedRecords, targetLang:string) => {
+export const mergeCreatedRecords = ( mergedTranslations:UpdateRecordRef[], mergedCreatedRecords:CreateRecordRef[], targetLang:string): UpdateRecordRef[] => {
   // First merge the created id, with existing translations from Dato
   // Example { en: "666", sv: null } -> { en: "666", sv:"555" }
-
-  const result = mergedTranslations[Fields.Items].reduce((acc, translation) => {
+  const result = mergedTranslations.reduce((acc, translation) => {
     const createdRecords = mergedCreatedRecords.filter(
       (record) => record.parentRecord.id === translation.id,
     );
 
     if (createdRecords.length > 0) {
       const mergedFields = createdRecords.reduce((innerAcc, record) => {
+
         const fieldKey = camelize(record.parentField.apiKey);
-        const existingTranslation = record.parentRecord[fieldKey];
+        const existingTranslation = record.parentRecord[fieldKey] as Record<string,unknown>;
 
         switch (record.fieldType) {
           case DatoFieldTypes.Link: {
+            const item = record.item as LinkRecordRef;
             if (existingTranslation) {
               innerAcc[fieldKey] = {
                 ...existingTranslation,
-                [targetLang]: record.item.data.id,
+                [targetLang]: item.data.id,
               };
             }
             break;
           }
           case DatoFieldTypes.Links: {
-            const linkIdArray = record.item.map((x) => x.data.id);
+            const items = record.item as LinkRecordRef[];
+            const linkIdArray = items.map((x) => x.data.id);
             innerAcc[fieldKey] = {
               ...existingTranslation,
               [targetLang]: linkIdArray,
@@ -118,7 +176,7 @@ export const mergeCreatedRecords = ( mergedTranslations, mergedCreatedRecords, t
           }
         }
         return innerAcc;
-      }, {});
+      }, {} as Record<string,unknown>);
 
       if (!isObjectEmpty(mergedFields)) {
         acc.push({
@@ -134,14 +192,10 @@ export const mergeCreatedRecords = ( mergedTranslations, mergedCreatedRecords, t
       acc.push(translation);
     }
     return acc;
-  }, []);
+  }, [] as UpdateRecordRef[]);
 
   // TODO how to deal with created records that dont have any parent translations to me merged to????
-
-  return {
-    ...mergedTranslations,
-    [Fields.Items]: result,
-  };
+  return result;
 };
 
 /**
@@ -177,12 +231,12 @@ const mergeRecordsForUpdate = (records:UpdateRecordRef[], newRecords:UpdateRecor
  * @param {string} sourceLang E.g [ "en" | "sv" ]
  * @returns { object | null }
  */
-const mergeUpdateRecord = ( record:Record<string,unknown>, translation:TranslationRecord, fields:Field[], targetLang:string, sourceLang :string): UpdateRecordRef | null => {
+const mergeUpdateRecord = ( record:Record<string,unknown>, translation:TranslationRecord, fields:Field[], logger:Logger, targetLang:string, sourceLang :string): UpdateRecordRef | null => {
   const data = translation.fields.reduce((acc, translationField) => {
     const apiKey = decamelize(translationField.fieldName, { separator: '_' });
     const field = fields.find((x) => x.apiKey === apiKey);
 
-    if (field) {
+    if (field && field.localized) {
       switch (field.fieldType) {
         case DatoFieldTypes.String:
         case DatoFieldTypes.Text: {
@@ -214,8 +268,9 @@ const mergeUpdateRecord = ( record:Record<string,unknown>, translation:Translati
         case DatoFieldTypes.File:
         case DatoFieldTypes.Seo: {
           const currentField = translationField as TranslationFieldSpecial;
+
           // Files (media) and SEO object are predefined objects sitting directly on a record
-          const objectField = mergeObjectField(record, currentField, sourceLang, targetLang );
+          const objectField = mergeObjectField(record, currentField, field, logger, sourceLang, targetLang );
 
           if (objectField) {
             acc[translationField.fieldName] = objectField;
@@ -245,16 +300,18 @@ const mergeUpdateRecord = ( record:Record<string,unknown>, translation:Translati
  * @param {record, translation, sourceLang, targetLang}
  * @returns {object}
  */
-const mergeObjectField = ( record:Record<string, unknown>, translation:TranslationFieldSpecial, sourceLang:string, targetLang:string ):Record<string,unknown> | null => {
+const mergeObjectField = ( record:Record<string, unknown>, translation:TranslationFieldSpecial, field:Field, logger:Logger, sourceLang:string, targetLang:string ):Record<string,unknown> | null => {
   // paranoia check, field may have been removed after export
   if (record[translation.fieldName]) {
     const newTranslation = objectifyFields(translation.fields);
 
     if (newTranslation) {
-      // TODO solve this sucka
-      const sourceTranslation = { ...record[translation.fieldName][sourceLang] } as Record<string,unknown>;
-      // Merge fields from soure that are not sent to translation E.g image for "seo", "focalPoint" for image etc
-      const mergedTranslation = { ...sourceTranslation, ...newTranslation };
+      const strippedTranslation = validateAndStripSEO(newTranslation, field, logger);
+      const sourceTranslationField = record[translation.fieldName] as Record<string,unknown>;
+      const sourceTranslation = { ...sourceTranslationField[sourceLang] as Record<string,unknown> } as Record<string,unknown>;
+
+      // Merge fields from source that are not sent to translation E.g image for "seo", "focalPoint" for image etc
+      const mergedTranslation = { ...sourceTranslation, ...strippedTranslation };
 
       return {
         ...record[translation.fieldName] as Record<string,unknown>,
@@ -306,26 +363,20 @@ const mergeNumberField = ( record:Record<string,unknown>, translation:Translatio
  * @param {string} Source language we are translating from
  * @returns {object} {records:array, modularBlocks: array}
  */
-export const findRecordsAndBlocksToCreate = (records:Record<string,unknown>[], models:Model[], translations:TranslationRecord[], sourceLang:string ) => {
-  let recordsToCreate: CreateRecordRef[] = [];
-
-  for (let i = 0, l = records.length; i < l; i++) {
-    let model = models.find((x) => x.id === records[i].itemType);
-
-    // This should never happen if Dato structure hasn´t been changed since export
-    if (!model) {
-      continue;
-    }
+ export const findRecordsAndBlocksToCreate = (records:Record<string,unknown>[], models:Model[], translations:TranslationRecord[], sourceLang:string ):RecordsAndBlocks => {
+  const result = records.reduce((recAcc, record) => {
+    let model = models.find((x) => x.id === record.itemType);
 
     // If model is not translatable there is nothing for us to do
     // Modular blocks dont have translatable fields on them, either the block is translatable or not
     if (
-      model.allLocalesRequired &&
-      !model.modularBlock
+      model?.allLocalesRequired &&
+      !model?.modularBlock
     ) {
-      recordsToCreate = model.fields.reduce((acc, field) => {
+      const recordsToCreate = model.fields.reduce((acc, field) => {
         const key = camelize(field.apiKey);
-        const recordField = records[i][key] as Record<string,unknown>;
+        const recordField = record[key] as Record<string,unknown>;
+
         switch (field.fieldType) {
           case DatoFieldTypes.Link: {
             const newRecord = createDatoLinkRecord(
@@ -338,7 +389,7 @@ export const findRecordsAndBlocksToCreate = (records:Record<string,unknown>[], m
               acc.push({
                 item: newRecord,
                 parentField: field,
-                parentRecord: { ...records[i] },
+                parentRecord: { ...record },
                 fieldType: field.fieldType,
               });
             }
@@ -360,7 +411,7 @@ export const findRecordsAndBlocksToCreate = (records:Record<string,unknown>[], m
               acc.push({
                 item: data,
                 parentField: field,
-                parentRecord: { ...records[i] },
+                parentRecord: { ...record },
                 fieldType: field.fieldType,
               });
             }
@@ -369,11 +420,13 @@ export const findRecordsAndBlocksToCreate = (records:Record<string,unknown>[], m
         return acc;
       }, [] as CreateRecordRef[]);
 
-      //recordsToCreate = [...recordsToCreate, ...newRecords];
+      recAcc.push(...recordsToCreate);
     }
-  }
 
-  return splitRecordsAndModularBlocks(recordsToCreate);
+    return recAcc;
+  },[] as CreateRecordRef[]);
+
+  return splitRecordsAndModularBlocks(result);
 };
 
 /**
@@ -385,7 +438,7 @@ export const findRecordsAndBlocksToCreate = (records:Record<string,unknown>[], m
  * @param {string} Source lang used for export
  * @returns { object | null }
  */
-const createDatoLinkRecord = ( field:Field, recordField:Record<string,unknown>, translations:TranslationRecord[], sourceLang :string) : LinksRecordRef | null=> {
+const createDatoLinkRecord = ( field:Field, recordField:Record<string,unknown>, translations:TranslationRecord[], sourceLang :string) : LinkRecordRef | null=> {
   if (field.localized) {
     if (recordField && recordField[sourceLang]) {
       const translationId = recordField[sourceLang];
@@ -415,7 +468,8 @@ const createDatoArrayLinkRecords = ( field:Field, recordField:Record<string,unkn
     const translationToCreate = translations.filter((item) => translationIdArray.includes(item.id));
 
     return translationToCreate.reduce((transAcc, trans) => {
-      const record = objectifyFields(trans.fields);
+
+      const record = objectifyFields(trans.fields as TranslationField[]);
       if (record && !isObjectEmpty(record)) {
         transAcc.push(formatCreateRecord(record, trans));
       }
@@ -430,12 +484,12 @@ const createDatoArrayLinkRecords = ( field:Field, recordField:Record<string,unkn
  * @param {object} param0
  * @returns
  */
-const constructRecordToCreate = ( translation:TranslationRecord | undefined ):LinksRecordRef | null => {
+const constructRecordToCreate = ( translation:TranslationRecord | undefined ):LinkRecordRef | null => {
 
   if (!translation || !translation.fields || translation.fields.length === 0) {
     return null;
   }
-  const record = objectifyFields(translation.fields);
+  const record = objectifyFields(translation.fields as TranslationField[]);
 
   if (record && !isObjectEmpty(record)) {
     return formatCreateRecord(record, translation);
@@ -449,7 +503,7 @@ const constructRecordToCreate = ( translation:TranslationRecord | undefined ):Li
  * @param {object} translation. Row from translation file
  * @returns {object} { data: {object}, reference: {id:string, itemType:string}}
  */
-const formatCreateRecord = (record:Record<string,unknown>, translation:TranslationRecord):LinksRecordRef => {
+const formatCreateRecord = (record:Record<string,unknown>, translation:TranslationRecord):LinkRecordRef => {
   return {
     data: { ...record },
     meta: { id: translation.id, [DatoFields.ItemType]: translation[DatoFields.ItemType] },
@@ -484,36 +538,39 @@ const splitRecordsAndModularBlocks = (records:CreateRecordRef[]):RecordsAndBlock
  * @param {array} records
  * @returns {array}
  */
-export const flattenAndDeDuplicate = (records) => {
+export const flattenAndDeDuplicate = (records:CreateRecordRef[]):CreateRecordRef[] => {
   // flatten list
   const flattenedList = records.reduce((acc, record) => {
     switch (record.fieldType) {
-      case DatoFieldTypes.Link:
+      case DatoFieldTypes.Link:{
         acc.push(record);
         break;
+      }
       case DatoFieldTypes.Links: {
         // links has an array of items
-        const linksResult = record.item.reduce((innerAcc, item) => {
+        const items = record.item as LinkRecordRef[];
+        const linksResult = items.reduce((innerAcc, item) => {
           innerAcc.push({
             ...record,
             item,
           });
           return innerAcc;
-        }, []);
+        }, [] as CreateRecordRef[]);
         acc.push(...linksResult);
         break;
       }
     }
     return acc;
-  }, []);
+  }, [] as CreateRecordRef[]);
 
   // remove duplicates
-  const uniqueList = [];
+  const uniqueList: CreateRecordRef[] = [];
 
   const reference = new Map();
   for (const record of flattenedList) {
-    if (!reference.has(record.item.meta.id)) {
-      reference.set(record.item.meta.id, true);
+    const item = record.item as LinkRecordRef;
+    if (!reference.has(item.meta.id)) {
+      reference.set(item.meta.id, true);
       uniqueList.push(record);
     }
   }
@@ -526,20 +583,27 @@ export const flattenAndDeDuplicate = (records) => {
  * @param {array} referenceRecords
  * @returns {array}
  */
-export const mergeNewRecords = (createdRecords, referenceRecords) => {
+export const mergeNewRecords = (createdRecords:CreatedRecord[], referenceRecords:CreateRecordRef[]):CreateRecordRef[] => {
   const result = referenceRecords.reduce((acc, reference) => {
     switch (reference.fieldType) {
       case DatoFieldTypes.Link: {
-        const record = createdRecords.find(
-          (x) => x.reference.item.meta.id === reference.item.meta.id,
-        );
+        const referenceItem = reference.item as LinkRecordRef;
+
+        const record = createdRecords.find((x) => {
+          const item = x.reference.item as LinkRecordRef;
+          if(item.meta.id === referenceItem.meta.id){
+            return x;
+          }
+          return null;
+        });
+
         if (record?.newRecord?.id) {
           const p = {
             ...reference,
             item: {
               ...reference.item,
               data: {
-                ...reference.item.data,
+                ...referenceItem.data,
                 id: record.newRecord.id,
               },
             },
@@ -549,8 +613,17 @@ export const mergeNewRecords = (createdRecords, referenceRecords) => {
         break;
       }
       case DatoFieldTypes.Links: {
-        const items = reference.item.reduce((innerAcc, ref) => {
-          const record = createdRecords.find((x) => x.reference.item.meta.id === ref.meta.id);
+        const referenceItems = reference.item as LinkRecordRef[];
+        const items = referenceItems.reduce((innerAcc, ref) => {
+
+          const record = createdRecords.find((x) => {
+            const item = x.reference.item as LinkRecordRef;
+            if(item.meta.id === ref.meta.id){
+              return x;
+            }
+            return null;
+          });
+
           if (record?.newRecord?.id) {
             innerAcc.push({
               data: {
@@ -563,7 +636,7 @@ export const mergeNewRecords = (createdRecords, referenceRecords) => {
             });
           }
           return innerAcc;
-        }, []);
+        }, [] as LinkRecordRef[]);
 
         if (items?.length > 0) {
           acc.push({
@@ -576,7 +649,7 @@ export const mergeNewRecords = (createdRecords, referenceRecords) => {
     }
 
     return acc;
-  }, []);
+  }, [] as CreateRecordRef[]);
   return result;
 };
 
@@ -588,23 +661,26 @@ export const mergeNewRecords = (createdRecords, referenceRecords) => {
  * @param {string} targetLang Language we are translating to
  * @return {object}
  */
-export const mergeAssetsToUpdate = ( assetsData:Record<string,unknown>, translations, sourceLang:string, targetLang :string) => {
+export const mergeAssetsToUpdate = ( assets:Record<string,unknown>[], translations:TranslationRecord[], sourceLang:string, targetLang :string):UpdateRecordRef[] => {
   const result = translations.reduce((acc, translation) => {
-    const currentAsset = assetsData.find((asset) => asset.id === translation.id);
+    const currentAsset = assets.find((asset) => asset.id === translation.id);
 
     if (currentAsset) {
-      const objTranslations = objectifyFields(translation[Fields.Items]);
-      console.log({ objTranslations });
+      const objTranslations = objectifyFields(translation.fields as TranslationField[]);
 
       if (!isObjectEmpty(objTranslations)) {
-        console.log({ currentAsset });
+
+        // Take existing translations
+        const currentAssetMetaData = currentAsset[DatoFields.AssetMetadata] as Record<string,unknown>;
+        // Take current meta data values from source lang like "focalPoint" etc and set on the new translation
+        const currentAssetMetaDataUntranslatable = currentAssetMetaData[sourceLang] as Record<string,unknown>;
 
         const data = {
           ...currentAsset,
           [DatoFields.AssetMetadata]: {
-            ...currentAsset[DatoFields.AssetMetadata],
+            ...currentAssetMetaData,
             [targetLang]: {
-              ...currentAsset[DatoFields.AssetMetadata][sourceLang],
+              ...currentAssetMetaDataUntranslatable,
               ...objTranslations,
             },
           },
@@ -618,10 +694,38 @@ export const mergeAssetsToUpdate = ( assetsData:Record<string,unknown>, translat
     }
 
     return acc;
-  }, []);
+  }, [] as UpdateRecordRef[]);
 
   return result;
 };
+
+/**
+ * @desc HACK WARNING AHEAD: Stripping too long translation on SEO title and description. Validators can be set everywhere nut SEO has default title:60 and description:160 making way too many updates to fail.
+ * @param record
+ * @param field
+ * @returns
+ */
+const validateAndStripSEO = (record:Record<string,unknown>, field:Field, logger:Logger):Record<string,unknown> => {
+
+  if(field.fieldType === DatoFieldTypes.Seo){
+    const context = "validateAndStripSEO";
+      let title = record[DatoFields.SeoTitle] as string;
+      let description = record[DatoFields.SeoDescription] as string;
+      if(title.length > field.validators.titleLength.max){
+        title = title.slice(0,field.validators.titleLength.max);
+        logger.log({context, type:LogType.Other, status:LogStatus.Warning, description:"Truncated SEO title", item:record});
+      }
+      if(description.length > field.validators.descriptionLength.max){
+        description = title.slice(0,field.validators.titleLength.max);
+        logger.log({context, type:LogType.Other, status:LogStatus.Warning, description:"Truncated SEO description", item:record});
+      }
+      return {
+        title,
+        description
+      }
+  }
+  return record;
+}
 
 /**
  * @desc Splits records and assets translations into 2 separate arrays, as they are always used separately
@@ -629,21 +733,18 @@ export const mergeAssetsToUpdate = ( assetsData:Record<string,unknown>, translat
  * @param {object} translationData { lang: "sv", fields: []}
  * @return {object} { records: [...], assets: [...]}
  */
-export const parseTranslationTypes = (translationData) => {
-  let records:Record<string,unknown> = [];
-  let assets:Record<string,unknown> = [];
+export const splitTranslationTypes = (translationData:TranslationData):TranslationRefs => {
+    const fields = translationData.fields as TranslationRecord[];
 
-  if (translationData) {
-    translationData[Fields.Items].forEach((element) => {
-      if (element[DatoFields.ItemType] === ItemTypes.Media) {
-        assets.push(element);
+    return fields.reduce((acc:TranslationRefs, record:TranslationRecord) => {
+      if (record[DatoFields.ItemType] === ItemTypes.Media) {
+        acc.assets.push(record);
       } else {
-        records.push(element);
+        acc.records.push(record);
       }
-    });
-  }
-  return {
-    records,
-    assets,
-  };
+      return acc;
+    }, {
+      records:[],
+      assets:[]
+    } as TranslationRefs)
 };

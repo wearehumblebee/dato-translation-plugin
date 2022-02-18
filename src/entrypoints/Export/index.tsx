@@ -1,23 +1,21 @@
 import { RenderPagePropertiesAndMethods } from 'datocms-plugin-sdk';
 import { useCallback, useMemo, useState } from 'react';
 import { SiteClient } from 'datocms-client';
-import { ExportSettings, ExportData } from '../../types/export';
-import { FileData, Model, FileRecord } from "../../types/shared";
+import { ExportSettings ,TranslationRecord, ExportSummary} from '../../types/export';
+import { TranslationData, Model, ReferenceData} from "../../types/shared";
 import { fetchDataForExport, fetchFieldsForModels } from "../../services/apiService";
 import { parseRecords, parseAssets,formatFileResult } from "../../services/exportService";
-import { createJSONBlob } from '../../helpers/downloadFile';
-import { isExportFileValid } from '../../validation/export';
+import { downloadFile } from '../../helpers/fileHandling';
+import { isExportFileValid } from '../../validation/validate';
+import Locales from "../../components/Locales";
+import LocaleSelector from '../../components/LocaleSelector';
+import ExportSummaryTable from '../../components/ExportSummaryTable';
 import s from './styles.module.css';
 import {
   Canvas,
   Toolbar,
   ToolbarStack,
   ToolbarTitle,
-  Dropdown,
-  DropdownOption,
-  DropdownMenu,
-  CaretUpIcon,
-  CaretDownIcon,
   SwitchField,
   Spinner,
   Button,
@@ -30,14 +28,14 @@ type PropTypes = {
 export default function Export({ ctx }: PropTypes) {
 
   const [settings, setSettings] = useState<ExportSettings>({
-    downloadFile:false,
     exportOnlyPublishedRecords: false,
-    exportAssets: false,
+    exportAssets: true,
     exportContent: true
   });
   const defaultLocale = ctx.site.attributes.locales.length > 0 ? ctx.site.attributes.locales[0] : "";
   const [isLoading, setIsLoading] = useState(false);
-  const [locale, setLocale] = useState(defaultLocale);
+  const [sourceLocale, setSourceLocale] = useState(defaultLocale);
+  const [summary, setSummary] = useState<ExportSummary | undefined>(undefined);
 
   const client = useMemo(
     () =>
@@ -57,28 +55,18 @@ export default function Export({ ctx }: PropTypes) {
 
   const changeLang = useCallback(
     (locale: string) => {
-      setLocale(locale);
+      setSourceLocale(locale);
     },
     [],
   );
 
-  const downloadFile = (blob:Blob, fileName:string):void => {
-    const dataUri = URL.createObjectURL(blob);
-
-    let linkElement = document.createElement('a');
-    linkElement.setAttribute('href', dataUri);
-    linkElement.setAttribute('download', fileName);
-    linkElement.click();
-  };
-
-  const createAndDownloadFile = (data:FileData):void => {
+  const createAndDownloadFile = (data:TranslationData):void => {
 
     const fileIsValid = isExportFileValid(data);
 
     if(fileIsValid){
       try{
-        const jsonObj = createJSONBlob(data);
-        downloadFile(jsonObj, `export - ${ctx.site.attributes.name}.json`);
+        downloadFile(data, `export-${ctx.site.attributes.name}`);
       }catch(err){
         console.error(err);
         ctx.customToast({
@@ -93,17 +81,18 @@ export default function Export({ ctx }: PropTypes) {
         message:"Export data is empty",
       });
     }
-
   }
 
   const runExport = async() => {
 
-    let data:ExportData  = {
+    let data:ReferenceData  = {
       records: [],
-      assets: []
+      assets: [],
+      models: []
     }
     let models:Model[] = [];
 
+    setSummary(undefined);
     setIsLoading(true);
 
     try{
@@ -115,19 +104,22 @@ export default function Export({ ctx }: PropTypes) {
 
     if(data && (data.records.length > 0 || data.assets.length > 0) && models.length > 0){
 
-      let assets : FileRecord[] = [];
+      let assets : TranslationRecord[] = [];
 
-      const records = parseRecords(data.records, models,locale );
+      const records = parseRecords(data.records, models,sourceLocale );
 
       if(settings.exportAssets){
-        assets = parseAssets(data.assets, locale);
+        assets = parseAssets(data.assets, sourceLocale);
       }
 
-      const result = formatFileResult(records, assets, locale);
+      const result = formatFileResult(records, assets, sourceLocale);
 
-      if(settings.downloadFile){
-        createAndDownloadFile(result);
-      }
+      setSummary({
+        file: result,
+        recordsCount: records.length,
+        assetsCount: assets.length
+      });
+
       ctx.notice(`${result.fields.length} records have been exported from language: ${result.lang}`)
     }else{
       ctx.customToast({
@@ -145,49 +137,38 @@ export default function Export({ ctx }: PropTypes) {
           <div className={s['layoutMain']}>
             <Toolbar>
               <ToolbarStack stackSize="l">
-                <ToolbarTitle>{`Export data (${locale})`}</ToolbarTitle>
-                <Dropdown
-                renderTrigger={({ open, onClick }) => (
-                  <Button
-                    onClick={onClick}
-                    rightIcon={open ? <CaretUpIcon /> : <CaretDownIcon />}
-                  >
-                    Select locale
-                    </Button>
-                )}
-              >
-                <DropdownMenu>
-                  {ctx.site.attributes.locales.map((locale, i) => {
-                    return (
-                      <DropdownOption key={`locale-option-${i}`} onClick={() => changeLang(locale)}>{locale}</DropdownOption>
-                    )
-                  })}
-                </DropdownMenu>
-              </Dropdown>
+                <ToolbarTitle>{`Export data`}</ToolbarTitle>
               </ToolbarStack>
             </Toolbar>
 
               <div className={s['layoutSettings']}>
-                <SwitchField id="downloadFile" name="downloadFile" label="Download export file" hint="" onChange={updateSettings.bind(null, 'downloadFile')} value={settings.downloadFile} />
                 <SwitchField id="exportContent" name="exportContent" label="Export content" hint="" onChange={updateSettings.bind(null, 'exportContent')} value={settings.exportContent} />
                 <SwitchField id="exportAssets" name="exportAssets" label="Export assets" hint="" onChange={updateSettings.bind(null, 'exportAssets')} value={settings.exportAssets} />
                 <SwitchField id="exportOnlyPublishedRecords" name="exportOnlyPublishedRecords" label="Export only published" hint="" onChange={updateSettings.bind(null, 'exportOnlyPublishedRecords')} value={settings.exportOnlyPublishedRecords} />
+                <LocaleSelector locales={ctx.site.attributes.locales} changeLocale={changeLang} label="Select source language" keyPrefix='source-locale' selectedLocale={sourceLocale}/>
               </div>
+              <Locales sourceLocale={sourceLocale} locales={ctx.site.attributes.locales} changeSourceLocale={changeLang} selectedSourceLocale={sourceLocale}/>
 
-              <Button
-                type="button"
-                fullWidth
-                buttonSize="xxs"
-                disabled={isLoading}
-                onClick={runExport}
-              >
-              Run export
-            </Button>
+              <div className={s['buttonWrapper']}>
+                <Button
+                  type="button"
+                  buttonType='primary'
+                  buttonSize="l"
+                  disabled={isLoading}
+                  onClick={runExport}
+                >
+                Run export
+              </Button>
+              </div>
 
             {isLoading && (
               <div className={s['layoutSpinner']}>
                 <Spinner/>
               </div>
+            )}
+
+            {!isLoading && summary && (
+              <ExportSummaryTable summary={summary} onDownloadClick={createAndDownloadFile}/>
             )}
 
           </div>

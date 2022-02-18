@@ -31,3 +31,9 @@
   top: 0;
   bottom: 0;
 }
+
+.buttonWrapper {
+  display: flex;
+  justify-content: center;
+  padding-top: var(--spacing-m);
+}

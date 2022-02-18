@@ -1,5 +1,5 @@
 import { HistoryRecord, HISTORY_VERSION } from './constants';
-import { FileField,ModularBlock } from '../types/shared';
+import { TranslationField,ModularBlock } from '../types/shared';
 
 /**
  * @desc Check if value string is numeric
@@ -43,7 +43,7 @@ export const isLinkUrl = (value:string): boolean => {
  * @param {array} fields
  * @returns {object | null} {keyName: "A value"}
  */
-export const objectifyFields = (fields:FileField[]):Record<string,unknown> | null => {
+export const objectifyFields = (fields:TranslationField[]):Record<string,unknown> | null => {
   if (!fields) {
     return null;
   }

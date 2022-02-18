@@ -1,3 +1,16 @@
+import { TranslationRecord as ExportRecord,  } from "./export";
+import { TranslationRecord as ImportRecord } from "./import";
+
+/**
+ * @desc Reference Data directly from DatoCMS
+ */
+export type ReferenceData = {
+  records: Record<string,unknown>[],
+  assets: Record<string,unknown>[],
+  models: Model[]
+
+}
+
 export type Model = {
   id:string;
   name: string;
@@ -10,6 +23,15 @@ export type Model = {
   fieldsReference: string[]
 }
 
+type SeoValidator = {
+  titleLength: {
+    max:number
+  };
+  descriptionLength: {
+    max:number
+  }
+}
+
 export type Field = {
   id:string;
   apiKey:string;
@@ -18,6 +40,7 @@ export type Field = {
   itemType:string;
   label:string;
   localized:boolean;
+  validators: SeoValidator; // This could be of many different types, this is the only one I am using at ATM
 }
 
 export type ModularBlock = {
@@ -37,18 +60,10 @@ export type ModularBlock = {
 
 export type TranslationData = {
   lang: string;
-  fields: TranslationRecord[] // I think
+  fields: ExportRecord[] | ImportRecord[]
 }
 
 export type FieldsArray = Array<TranslationField | TranslationFieldSpecial>;
-
-export type TranslationRecord = {
-  id:string;
-  itemType:string;
-  modelName: string; // TODO should this be name ???
-  hint:string;
-  fields?: FieldsArray;
-}
 
 interface TranslationFieldBase {
   fieldName:string;
@@ -74,4 +89,9 @@ export type SeoField = {
   title?:string;
   description?:string;
   image?: object
+}
+
+export type CustomToast = {
+  type : "notice" | "warning" | "alert";
+  message:string;
 }

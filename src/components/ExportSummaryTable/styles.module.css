@@ -1,0 +1,20 @@
+.tableWrapper {
+  display: flex;
+  justify-content: center;
+  padding: var(--spacing-xl) 0;
+}
+
+.layoutTable {
+  width: 35%;
+}
+
+th,
+td {
+  padding: 0.8rem;
+  border-bottom: 1px solid var(--light-color);
+  text-align: center;
+}
+
+tfoot td {
+  font-weight: 600;
+}

@@ -1,12 +1,14 @@
-import { Model,TranslationRecord,TranslationData,FileField,FileFieldSpecial,FieldsArray, MediaField, SeoField } from '../types/shared';
+import { Model,TranslationData,TranslationField,TranslationFieldSpecial,FieldsArray, MediaField, SeoField } from '../types/shared';
 import { Fields, DatoFields, ItemTypes, DatoFieldTypes } from '../helpers/constants';
-import { ReferenceRecord } from "../types/export";
+import { ReferenceRecord, TranslationRecord } from "../types/export";
 import { isLinkUrl } from '../helpers/parseHelper';
+import { CreateFieldArgs,CreateSpecialFieldArgs } from "../services/interfaces";
 import { camelize } from 'humps';
 
-export const parseRecords = (allRecords:Record<string,unknown>[], models:Model[], lang = 'en'):TranslationRecord[] => {
+export const parseRecords = (allRecords:Record<string,unknown>[], models:Model[], sourceLang :string):TranslationRecord[] => {
+
   let result:TranslationRecord[] = [];
-  const data = parseParentRecords(allRecords, models, lang);
+  const data = parseParentRecords(allRecords, models, sourceLang);
 
   // Get modular blocks
   const linkedRecordsAndBlocks = findLinkedRecordsAndBlocks(
@@ -25,10 +27,9 @@ export const parseRecords = (allRecords:Record<string,unknown>[], models:Model[]
     }
   }
   return result;
-
 };
 
-export const parseParentRecords = (allRecords:Record<string,unknown>[], models:Model[], lang = 'en'):ReferenceRecord => {
+const parseParentRecords = (allRecords:Record<string,unknown>[], models:Model[], sourceLang:string):ReferenceRecord => {
 
   const result = allRecords.reduce(
     (acc:ReferenceRecord, record:Record<string,unknown>) => {
@@ -40,7 +41,7 @@ export const parseParentRecords = (allRecords:Record<string,unknown>[], models:M
           !model.modularBlock
         ) {
           // Regular record
-          const transRecord = createRecord(record, model, lang);
+          const transRecord = createRecord(record, model, sourceLang);
           if (transRecord) {
 
             acc.records.push(transRecord.data);
@@ -51,7 +52,6 @@ export const parseParentRecords = (allRecords:Record<string,unknown>[], models:M
           }
         }
       }
-
       return acc;
     },
     {
@@ -66,7 +66,7 @@ export const parseParentRecords = (allRecords:Record<string,unknown>[], models:M
 const parseLinkedRecordsAndModularBlocks = (linkedRecordsAndBlocks:Record<string,unknown>[], models:Model[]) :TranslationRecord[] => {
   const result = linkedRecordsAndBlocks.reduce((acc, record) => {
     // These records dont have any localized flags
-    const model = models.find((x) => x.id === record.type);
+    const model = models.find((x) => x.id === record.itemType);
     if (model) {
       const newRecord = createModularBlock(record, model);
       if (newRecord) {
@@ -168,7 +168,7 @@ const createModularBlock = (record:Record<string,unknown>, model:Model):Translat
 
     return acc;
   }, [] as FieldsArray);
-  //}, [] as FileField[]);
+  //}, [] as TranslationField[]);
 
   // If no fields can be translated on current block there is no point adding it to export
   if (result.length > 0) {
@@ -197,7 +197,7 @@ const createRecord = (record:Record<string,unknown>, model:Model, lang:string): 
       let value = null;
 
       if(record[key]){
-        const recordKey = record[key] as Record<string, unknown> || [];
+        const recordKey = record[key] as Record<string, unknown>;
 
         if(recordKey[lang]){
           value = recordKey[lang];
@@ -216,7 +216,12 @@ const createRecord = (record:Record<string,unknown>, model:Model, lang:string): 
           acc.push(fieldResult);
         } else {
           // ugly as balls
-          referenceIdArray = [...referenceIdArray, ...value as []];
+          if(currentField.fieldType === DatoFieldTypes.Link){
+            referenceIdArray = [...referenceIdArray, value as string];
+          }else{
+            referenceIdArray = [...referenceIdArray, ...value as []];
+          }
+
         }
       }
     }
@@ -240,7 +245,7 @@ const createRecord = (record:Record<string,unknown>, model:Model, lang:string): 
  * @param {fieldType: string, key: string, value: string | number | object, hint: string}
  * @returns
  */
-const createFieldHelper = (fieldType:string, key:string, value:unknown, hint:string | null ): FileField | FileFieldSpecial | null => {
+const createFieldHelper = (fieldType:string, key:string, value:unknown, hint:string | null ): TranslationField | TranslationFieldSpecial | null => {
   let result = null;
 
   // Skip all empty values from source language
@@ -261,7 +266,7 @@ const createFieldHelper = (fieldType:string, key:string, value:unknown, hint:str
       case DatoFieldTypes.File: {
         // We only take meta title and alt fields for translation
         // if they dont exist this field will not be sent for tranlations
-        result = createFileField( key, value as MediaField);
+        result = createTranslationField( key, value as MediaField);
         break;
       }
       case DatoFieldTypes.Seo: {
@@ -269,6 +274,7 @@ const createFieldHelper = (fieldType:string, key:string, value:unknown, hint:str
         result = createSEOField({ key, value :seoField, hint });
         break;
       }
+      case DatoFieldTypes.Links:
       case DatoFieldTypes.RichText: {
         if(value){
           // we have no idea what shape the array is and it does not matter here
@@ -278,8 +284,18 @@ const createFieldHelper = (fieldType:string, key:string, value:unknown, hint:str
               type: 'reference',
               value,
               fieldName: "",
-            } as FileField;
+            } as TranslationField;
           }
+        }
+        break;
+      }
+      case DatoFieldTypes.Link:{
+        if(value){
+          result = {
+            type: 'reference',
+            value: [value],
+            fieldName: "",
+          } as TranslationField;
         }
         break;
       }
@@ -302,7 +318,7 @@ const createFieldHelper = (fieldType:string, key:string, value:unknown, hint:str
  */
 export const parseAssets = (assets:Record<string,unknown>[], lang = 'en'):TranslationRecord[] => {
 
-  // We dont care about the asset type (image, video, document), we are only interested in the meta data object
+  // We dont care about the asset type (image, video, document), we are only interested in the meta data object for assets
   const result = assets.reduce((acc, asset:Record<string,unknown>) => {
     const field = asset[DatoFields.AssetMetadata] as Record<string,unknown>;
 
@@ -331,7 +347,7 @@ export const parseAssets = (assets:Record<string,unknown>[], lang = 'en'):Transl
  * @param {string} value
  * @return {array} -
  */
-export const createFileField = ( key:string, value:MediaField ) : FileFieldSpecial | null => {
+const createTranslationField = ( key:string, value:MediaField ) : TranslationFieldSpecial | null => {
   const result = createFileMetaFields(value);
   return result.length > 0 ? createSpecialField( {key, fields: result} ) : null;
 };
@@ -341,7 +357,7 @@ export const createFileField = ( key:string, value:MediaField ) : FileFieldSpeci
  * @param {string} value
  * @return {array}
  */
-const createFileMetaFields = (value:MediaField):FileField[] => {
+const createFileMetaFields = (value:MediaField):TranslationField[] => {
   let result = [];
   if (value?.alt) {
     result.push(createField({ key: DatoFields.MediaAlt, value: value.alt }));
@@ -364,7 +380,7 @@ interface createSEOFieldArgs  {
  * @param {string} value
  * @return {array} -
  */
-const createSEOField = ( {key, value, hint}:createSEOFieldArgs ): FileFieldSpecial | null => {
+const createSEOField = ( {key, value, hint}:createSEOFieldArgs ): TranslationFieldSpecial | null => {
   let result = [];
   if (value?.title) {
     result.push(createField({ key: DatoFields.SeoTitle, value: value.title }));
@@ -378,20 +394,14 @@ const createSEOField = ( {key, value, hint}:createSEOFieldArgs ): FileFieldSpeci
     : null;
 };
 
-interface createFieldArgs {
-  key:string;
-  value: unknown,
-  hint?:string | null;
-}
-
 /**
- * @desc Helper to create string field. {fieldName: "key", value: "Hello hello"}
+ * @desc Helper to create string | text field. {fieldName: "key", value: "Hello hello"}
  * @param {string} key
  * @param {string} value
  * @param {string} hint Hint from dato about what the field does
  * @return {object} { id: "434344", itemType: "123456", fields: []}
  */
-const createField = ({ key, value, hint }:createFieldArgs) :FileField => {
+const createField = ({ key, value, hint }:CreateFieldArgs) :TranslationField => {
   return {
     [Fields.Name]:key,
     [Fields.Value]: value,
@@ -399,20 +409,14 @@ const createField = ({ key, value, hint }:createFieldArgs) :FileField => {
   }
 };
 
-interface createSpecialFieldArgs {
-  key:string;
-  fields: FileField[];
-  hint?:string | null;
-}
-
 /**
  * @desc Helper to create File (media) or SEO field.
  * @param {string} key
  * @param {string} hint Hint from dato about what the field does
- * @param {array} List of regular FileFields
+ * @param {array} List of regular TranslationFields
  * @return {object} { id: "434344", itemType: "123456", fields: []}
  */
-const createSpecialField = ({key, hint,fields}:createSpecialFieldArgs) : FileFieldSpecial => {
+const createSpecialField = ({key, hint,fields}:CreateSpecialFieldArgs) : TranslationFieldSpecial => {
   return {
     [Fields.Name]:key,
     [Fields.Hint] : hint || "",
@@ -468,7 +472,7 @@ const createDefaultRecord = (record:Record<string,unknown>, model:Model, items:F
  * @param {items} Optional init items
  * @return {object} { id: "434344", itemType: "123456", fields: []}
  */
-export const constructDefaultAssetRecord = (record:Record<string,unknown>, items:FileField[]):TranslationRecord => {
+export const constructDefaultAssetRecord = (record:Record<string,unknown>, items:TranslationField[]):TranslationRecord => {
   return {
     id: record.id,
     // Assets dont have itemType (model id), using this to differentiate records from assets

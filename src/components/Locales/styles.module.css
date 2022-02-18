@@ -1,0 +1,9 @@
+.langSettings {
+  display: flex;
+  justify-content: center;
+  padding: var(--spacing-m) 0;
+}
+
+.langSettings div:first-child {
+  margin-right: var(--spacing-l);
+}
