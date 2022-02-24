@@ -23,12 +23,18 @@ export type Model = {
   fieldsReference: string[]
 }
 
-type SeoValidator = {
+export type SeoValidator = {
   titleLength: {
     max:number
   };
   descriptionLength: {
     max:number
+  }
+}
+
+export type StringValidator = {
+  enum?: {
+    values: string[]
   }
 }
 
@@ -40,7 +46,8 @@ export type Field = {
   itemType:string;
   label:string;
   localized:boolean;
-  validators: SeoValidator; // This could be of many different types, this is the only one I am using at ATM
+  // More validators could be used in the future
+  validators: StringValidator | SeoValidator;
 }
 
 export type ModularBlock = {

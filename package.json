@@ -43,7 +43,7 @@
     "cross-env": "^7.0.3"
   },
   "datoCmsPlugin": {
-    "title": "",
+    "title": "Bulk translation",
     "previewImage": "",
     "coverImage": "",
     "entryPoint": "build/index.html"

@@ -11,7 +11,6 @@ import { importRecords,importAssets, splitTranslationTypes } from "../../service
 import SummaryTable from "../../components/SummaryTable";
 import FileUpload from "../../components/FileUpload";
 import Locales from "../../components/Locales";
-import LocaleSelector from '../../components/LocaleSelector';
 import Logger from "../../helpers/logger";
 import s from './styles.module.css';
 import {

@@ -1,5 +1,5 @@
 import { HistoryRecord, HISTORY_VERSION } from './constants';
-import { TranslationField,ModularBlock } from '../types/shared';
+import { TranslationField,ModularBlock, Field, StringValidator } from '../types/shared';
 
 /**
  * @desc Check if value string is numeric
@@ -24,21 +24,6 @@ export const isObjectEmpty = (obj:object | Record<string,unknown> | null | undef
 };
 
 /**
- * @desc Check if value string is a url, typically we don´t want to translate url:s
- * @param {string} value
- * @return {boolean}
- */
-
-export const isLinkUrl = (value:string): boolean => {
-  if (typeof value === 'string') {
-    if (value?.startsWith('/') || value?.startsWith('http')) {
-      return true;
-    }
-  }
-  return false;
-};
-
-/**
  * @desc Takes standard "Fields" array [{fieldName: "keyName", value: "A value"}, ...] and return object
  * @param {array} fields
  * @returns {object | null} {keyName: "A value"}
@@ -52,6 +37,7 @@ export const objectifyFields = (fields:TranslationField[]):Record<string,unknown
     return acc;
   }, {} as Record<string,unknown>);
 };
+
 
 /**
  * @desc Helper function to create modular blocks as of now I cant use DatoCMS "buildModularBlock" helper which is supposed to do the same thing

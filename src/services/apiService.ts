@@ -1,9 +1,9 @@
 import {  ModelBlock } from 'datocms-plugin-sdk';
 import { Model, ReferenceData } from '../types/shared';
-import { CreatedRecord } from '../types/import';
+import { CreatedRecord } from "../types/import";
 import { fetchRecords, fetchAssets } from "../api/queries";
-import { LogType, LogStatus} from './../types/logger';
-import { CreateRecordsArgs,UpdateRecordsArgs } from "./interfaces";
+import { LogType, LogStatus} from '../types/logger';
+import { CreateRecordsArgs,UpdateRecordsArgs } from "./interfaces"
 import { createRecord, updateRecord, updateAsset, fetchFields, bulkPublishRecords } from "../api/queries";
 import { DatoFields } from '../helpers/constants';
 import { camelize } from 'humps';
@@ -138,7 +138,6 @@ export const updateAssets = async ({ client, records,logger, isDryRun}:UpdateRec
 };
 
 export const publishAllRecords = async(client:any, isDryRun:boolean) :Promise<number> => {
-
 
   const records = await fetchRecords(client, false);
 

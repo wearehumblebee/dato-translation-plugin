@@ -9,7 +9,7 @@ connect({
     return [
       {
         label: 'Export',
-        icon: 'calendar',
+        icon: 'file-export',
         pointsTo: {
           pageId: 'export',
         },
@@ -17,7 +17,7 @@ connect({
       },
       {
         label: 'Import',
-        icon: 'calendar',
+        icon: 'file-import',
         pointsTo: {
           pageId: 'import',
         },
@@ -26,7 +26,6 @@ connect({
     ];
   },
   renderPage(pageId, ctx) {
-    // TODO switch by pageId for import
     if(pageId === "export"){
       return render(<Export ctx={ctx}/>);
     }else{

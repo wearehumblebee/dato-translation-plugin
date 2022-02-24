@@ -1,7 +1,7 @@
-import { Model,TranslationData,TranslationField,TranslationFieldSpecial,FieldsArray, MediaField, SeoField } from '../types/shared';
+import { Model,TranslationData,TranslationField,TranslationFieldSpecial,FieldsArray,Field, MediaField, SeoField } from '../types/shared';
 import { Fields, DatoFields, ItemTypes, DatoFieldTypes } from '../helpers/constants';
 import { ReferenceRecord, TranslationRecord } from "../types/export";
-import { isLinkUrl } from '../helpers/parseHelper';
+import { isStringFieldTranslatable } from '../validation/validate';
 import { CreateFieldArgs,CreateSpecialFieldArgs } from "../services/interfaces";
 import { camelize } from 'humps';
 
@@ -159,7 +159,7 @@ const createModularBlock = (record:Record<string,unknown>, model:Model):Translat
         value = record[key];
       }
 
-      const fieldResult = createFieldHelper( currentField.fieldType, key, value, hint );
+      const fieldResult = createFieldHelper( currentField, key, value, hint );
 
       if (fieldResult) {
         acc.push(fieldResult);
@@ -205,7 +205,7 @@ const createRecord = (record:Record<string,unknown>, model:Model, lang:string): 
       }
 
       const fieldResult = createFieldHelper(
-        currentField.fieldType,
+        currentField,
         key,
         value,
         hint,
@@ -245,15 +245,14 @@ const createRecord = (record:Record<string,unknown>, model:Model, lang:string): 
  * @param {fieldType: string, key: string, value: string | number | object, hint: string}
  * @returns
  */
-const createFieldHelper = (fieldType:string, key:string, value:unknown, hint:string | null ): TranslationField | TranslationFieldSpecial | null => {
+const createFieldHelper = (field:Field, key:string, value:unknown, hint:string | null ): TranslationField | TranslationFieldSpecial | null => {
   let result = null;
 
   // Skip all empty values from source language
   if (value) {
-    switch (fieldType) {
+    switch (field.fieldType) {
       case DatoFieldTypes.String: {
-        // Dont send url:s for translation
-        if (!isLinkUrl(value as string)) {
+        if(isStringFieldTranslatable(field, value as string)){
           result = createField( {key, value, hint} );
         }
         break;

@@ -12,12 +12,12 @@ export type TranslationRefs = {
 }
 
 /**
- * @desc Almost identical to TranslationRecord from export types but fields are never optionsl
+ * @desc Almost identical to TranslationRecord from export types but fields are never optional
  */
 export type TranslationRecord = {
   id:string;
   itemType:string;
-  modelName: string; // TODO : called modelName in export is this right?
+  modelName: string;
   hint:string;
   fields: FieldsArray;
 }

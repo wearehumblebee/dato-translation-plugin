@@ -1,4 +1,4 @@
-import { TranslationData, CustomToast } from "../types/shared";
+import { TranslationData, CustomToast, Field, StringValidator } from "../types/shared";
 
 /**
  * @desc Rudimentary validation of export file
@@ -53,3 +53,36 @@ export const isImportInvalid = (file: TranslationData | undefined, sourceLang:st
   }
   return null;
 }
+
+/**
+ * @desc Some strings should not be sent for translation. Links and strings with specific values (dropdown in Dato) cant be translated
+ * @param field
+ * @param value
+ * @returns {boolean}
+ */
+ export const isStringFieldTranslatable = (field:Field, value:string):boolean => {
+  if(!isLinkUrl(value)){
+    const validator = field.validators as StringValidator;
+    if(validator?.enum?.values?.length){
+      // Accept only specified values is active for this field and they cant be translated
+      return false;
+    }
+    return true;
+  }
+  return false;
+}
+
+/**
+ * @desc Check if value string is a url, typically we don´t want to translate url:s
+ * @param {string} value
+ * @return {boolean}
+ */
+
+ export const isLinkUrl = (value:string): boolean => {
+  if (typeof value === 'string') {
+    if (value?.startsWith('/') || value?.startsWith('http')) {
+      return true;
+    }
+  }
+  return false;
+};

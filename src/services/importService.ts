@@ -1,5 +1,5 @@
 import {  DatoFieldTypes, DatoFields, ItemTypes } from '../helpers/constants';
-import { Model,Field,TranslationData,TranslationField,TranslationFieldSpecial } from '../types/shared';
+import { Model,Field,TranslationData,TranslationField,TranslationFieldSpecial, SeoValidator } from '../types/shared';
 import { LinkRecordRef,CreateRecordRef,UpdateRecordRef, RecordsAndBlocks ,TranslationRecord, CreatedRecord, TranslationRefs } from "../types/import";
 import {
   isNumericString,
@@ -115,12 +115,13 @@ export const mergeModularBlocks = ( mergedTranslations:UpdateRecordRef[], modula
   const result = modularBlocks.reduce((acc, block) => {
     const record = mergedTranslations.find((x) => x.id === block.parentRecord.id);
     if (record) {
-      const key = decamelize(block.parentField.apiKey, { separator: '_' });
+      const key = camelize(block.parentField.apiKey);
       const blockItems = block.item as LinkRecordRef[];
       const preparedBlocks = blockItems.map((item) => {
         return buildModularBlockHelper(item.data, item.meta.itemType);
       });
       if (preparedBlocks?.length > 0) {
+
         acc.push({
           ...record,
           data: {
@@ -708,15 +709,16 @@ export const mergeAssetsToUpdate = ( assets:Record<string,unknown>[], translatio
 const validateAndStripSEO = (record:Record<string,unknown>, field:Field, logger:Logger):Record<string,unknown> => {
 
   if(field.fieldType === DatoFieldTypes.Seo){
+    const validators = field.validators as SeoValidator;
     const context = "validateAndStripSEO";
       let title = record[DatoFields.SeoTitle] as string;
       let description = record[DatoFields.SeoDescription] as string;
-      if(title.length > field.validators.titleLength.max){
-        title = title.slice(0,field.validators.titleLength.max);
+      if(title.length > validators.titleLength.max){
+        title = title.slice(0,validators.titleLength.max);
         logger.log({context, type:LogType.Other, status:LogStatus.Warning, description:"Truncated SEO title", item:record});
       }
-      if(description.length > field.validators.descriptionLength.max){
-        description = title.slice(0,field.validators.titleLength.max);
+      if(description.length > validators.descriptionLength.max){
+        description = title.slice(0,validators.titleLength.max);
         logger.log({context, type:LogType.Other, status:LogStatus.Warning, description:"Truncated SEO description", item:record});
       }
       return {

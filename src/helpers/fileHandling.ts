@@ -1,5 +1,10 @@
 import { TranslationData } from "../types/shared";
 
+/**
+ * @desc Automatically triggers download/open file (browser dependent)
+ * @param data
+ * @param fileName
+ */
 export const downloadFile = (data:any, fileName:string):void => {
   if(data && fileName){
     const blob = createJSONBlob(data);
