@@ -55,7 +55,7 @@ export const isImportInvalid = (file: TranslationData | undefined, sourceLang:st
 }
 
 /**
- * @desc Some strings should not be sent for translation. Links and strings with specific values (dropdown in Dato) cant be translated
+ -* @desc Some strings should not be sent for translation. Links and strings with specific values (dropdown in Dato) cant be translated
  * @param field
  * @param value
  * @returns {boolean}

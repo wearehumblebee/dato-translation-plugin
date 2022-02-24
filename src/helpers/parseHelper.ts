@@ -1,5 +1,5 @@
 import { HistoryRecord, HISTORY_VERSION } from './constants';
-import { TranslationField,ModularBlock, Field, StringValidator } from '../types/shared';
+import { TranslationField,ModularBlock } from '../types/shared';
 
 /**
  * @desc Check if value string is numeric
@@ -37,7 +37,6 @@ export const objectifyFields = (fields:TranslationField[]):Record<string,unknown
     return acc;
   }, {} as Record<string,unknown>);
 };
-
 
 /**
  * @desc Helper function to create modular blocks as of now I cant use DatoCMS "buildModularBlock" helper which is supposed to do the same thing
