@@ -1,3 +1,4 @@
+import { ModularBlock } from './../types/shared';
 import {  DatoFieldTypes, DatoFields, ItemTypes } from '../helpers/constants';
 import { Model,Field,TranslationData,TranslationField,TranslationFieldSpecial, SeoValidator } from '../types/shared';
 import { LinkRecordRef,CreateRecordRef,UpdateRecordRef, RecordsAndBlocks ,TranslationRecord, CreatedRecord, TranslationRefs } from "../types/import";
@@ -117,13 +118,16 @@ export const mergeModularBlocks = ( mergedTranslations:UpdateRecordRef[], modula
     if (record) {
       const key = camelize(block.parentField.apiKey);
       const blockItems = block.item as LinkRecordRef[];
-      //const preparedBlocks = blockItems.map((item) => {
-      const preparedBlocks = blockItems.filter((item) => {
+
+      // Convert block structures to actual DatoCMS modular block structure
+      const preparedBlocks = blockItems.reduce((acc:ModularBlock[], item:LinkRecordRef) => {
         const readyBlock = buildModularBlockHelper(item.data, item.meta.itemType);
         if(readyBlock){
-          return readyBlock;
+          acc.push(readyBlock);
         }
-      });
+        return acc;
+      }, [] as ModularBlock[]);
+
       if (preparedBlocks?.length > 0) {
 
         acc.push({
