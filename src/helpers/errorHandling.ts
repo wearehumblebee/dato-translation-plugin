@@ -6,20 +6,7 @@ import { LogError } from "../types/logger";
  * @returns
  */
 export const parseError = (error:any): LogError => {
-  if (error instanceof TypeError) {
-    return {
-      name: error.name,
-      message:error.message
-    }
-  }
-  else if(error instanceof RangeError){
-    return {
-      name: error.name,
-      message:error.message
-    }
-
-  }
-  else if(error instanceof EvalError){
+  if (error instanceof TypeError || error instanceof RangeError || error instanceof EvalError || error instanceof Error) {
     return {
       name: error.name,
       message:error.message
@@ -30,23 +17,11 @@ export const parseError = (error:any): LogError => {
       name: "",
       message:error
     }
-  }else if(error instanceof Error){
-    return {
-      name: error.name,
-      message:error.message
-    }
-  }else{
-
+  }
+  else{
     const message = error?.message || "";
     const statusCode = error?.statusCode || 0;
     const statusText = error?.statusText || "";
-
-    // const t = {
-    //   stack:"",
-    //   message:"",
-    //   statusCode: 422,
-    //   statusText: ""
-    // }
 
     return {
       name:"Unknown",

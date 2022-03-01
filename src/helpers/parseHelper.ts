@@ -29,7 +29,7 @@ export const isObjectEmpty = (obj:object | Record<string,unknown> | null | undef
  * @returns {object | null} {keyName: "A value"}
  */
 export const objectifyFields = (fields:TranslationField[]):Record<string,unknown> | null => {
-  if (!fields) {
+  if (!fields || fields.length === 0) {
     return null;
   }
   return fields.reduce((acc, curr) => {
@@ -44,19 +44,22 @@ export const objectifyFields = (fields:TranslationField[]):Record<string,unknown
  * @param {object} model , Dato model fields used are id (itemType) and apiKey
  * @returns {object}
  */
-export const buildModularBlockHelper = (data:object, modelId:string):ModularBlock => {
-  return {
-    type: 'item',
-    attributes: data,
-    relationships: {
-      item_type: {
-        data: {
-          id: modelId,
-          type: 'item_type',
+export const buildModularBlockHelper = (data:Record<string,unknown>, modelId:string):ModularBlock | null => {
+  if(data && modelId) {
+    return {
+      type: 'item',
+      attributes: data,
+      relationships: {
+        item_type: {
+          data: {
+            id: modelId,
+            type: 'item_type',
+          },
         },
       },
-    },
-  };
+    };
+  }
+  return null;
 };
 
 /**

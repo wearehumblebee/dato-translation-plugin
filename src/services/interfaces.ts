@@ -1,5 +1,5 @@
 import { CreateRecordRef, TranslationRecord, UpdateRecordRef } from './../types/import';
-import { Model ,TranslationField } from '../types/shared';
+import { Model ,TranslationField, SeoField } from '../types/shared';
 import Logger from "../helpers/logger";
 
 interface ApiBase {
@@ -44,4 +44,10 @@ export interface CreateSpecialFieldArgs {
   key:string;
   fields: TranslationField[];
   hint?:string | null;
+}
+
+export interface createSEOFieldArgs  {
+  key:string;
+  value: SeoField;
+  hint:string | null;
 }

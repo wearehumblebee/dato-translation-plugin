@@ -1,9 +1,9 @@
 import { Model,TranslationData,TranslationField,TranslationFieldSpecial,FieldsArray,Field, MediaField, SeoField } from '../types/shared';
-import { Fields, DatoFields, ItemTypes, DatoFieldTypes } from '../helpers/constants';
+import { Fields, DatoFields, DatoFieldTypes } from '../helpers/constants';
 import { ReferenceRecord, TranslationRecord } from "../types/export";
 import { isStringFieldTranslatable } from '../validation/validate';
-import { CreateFieldArgs,CreateSpecialFieldArgs } from "../services/interfaces";
 import { camelize } from 'humps';
+import { createField, createSpecialField, createDefaultRecord, constructDefaultAssetRecord, createSEOField } from "./structure/export";
 
 export const parseRecords = (allRecords:Record<string,unknown>[], models:Model[], sourceLang :string):TranslationRecord[] => {
 
@@ -367,11 +367,11 @@ const createFileMetaFields = (value:MediaField):TranslationField[] => {
   return result;
 };
 
-interface createSEOFieldArgs  {
-  key:string;
-  value: SeoField;
-  hint:string | null;
-}
+// interface createSEOFieldArgs  {
+//   key:string;
+//   value: SeoField;
+//   hint:string | null;
+// }
 
 /**
  * @desc Helper to create SEO DatoCMS standard object with { title, description }, disregarding image for now
@@ -379,19 +379,19 @@ interface createSEOFieldArgs  {
  * @param {string} value
  * @return {array} -
  */
-const createSEOField = ( {key, value, hint}:createSEOFieldArgs ): TranslationFieldSpecial | null => {
-  let result = [];
-  if (value?.title) {
-    result.push(createField({ key: DatoFields.SeoTitle, value: value.title }));
-  }
-  if (value?.description) {
-    result.push(createField({ key: DatoFields.SeoDescription, value: value.description }));
-  }
+// const createSEOField = ( {key, value, hint}:createSEOFieldArgs ): TranslationFieldSpecial | null => {
+//   let result = [];
+//   if (value?.title) {
+//     result.push(createField({ key: DatoFields.SeoTitle, value: value.title }));
+//   }
+//   if (value?.description) {
+//     result.push(createField({ key: DatoFields.SeoDescription, value: value.description }));
+//   }
 
-  return result.length > 0
-    ? createSpecialField({ key, hint, fields:result })
-    : null;
-};
+//   return result.length > 0
+//     ? createSpecialField({ key, hint, fields:result })
+//     : null;
+// };
 
 /**
  * @desc Helper to create string | text field. {fieldName: "key", value: "Hello hello"}
@@ -400,13 +400,13 @@ const createSEOField = ( {key, value, hint}:createSEOFieldArgs ): TranslationFie
  * @param {string} hint Hint from dato about what the field does
  * @return {object} { id: "434344", itemType: "123456", fields: []}
  */
-const createField = ({ key, value, hint }:CreateFieldArgs) :TranslationField => {
-  return {
-    [Fields.Name]:key,
-    [Fields.Value]: value,
-    [Fields.Hint]: hint || "",
-  }
-};
+// const createField = ({ key, value, hint }:CreateFieldArgs) :TranslationField => {
+//   return {
+//     [Fields.Name]:key,
+//     [Fields.Value]: value,
+//     [Fields.Hint]: hint || "",
+//   }
+// };
 
 /**
  * @desc Helper to create File (media) or SEO field.
@@ -415,13 +415,13 @@ const createField = ({ key, value, hint }:CreateFieldArgs) :TranslationField => 
  * @param {array} List of regular TranslationFields
  * @return {object} { id: "434344", itemType: "123456", fields: []}
  */
-const createSpecialField = ({key, hint,fields}:CreateSpecialFieldArgs) : TranslationFieldSpecial => {
-  return {
-    [Fields.Name]:key,
-    [Fields.Hint] : hint || "",
-    [Fields.Items]: fields
-  }
-}
+// const createSpecialField = ({key, hint,fields}:CreateSpecialFieldArgs) : TranslationFieldSpecial => {
+//   return {
+//     [Fields.Name]:key,
+//     [Fields.Hint] : hint || "",
+//     [Fields.Items]: fields
+//   }
+// }
 
 /**
  * @desc Merges assets data with regular records
@@ -450,20 +450,20 @@ export const formatFileResult = (records:TranslationRecord[], assets:Translation
  * @param {items} Optional init items
  * @return {object} { id: "434344", itemType: "123456", fields: []}
  */
-const createDefaultRecord = (record:Record<string,unknown>, model:Model, items:FieldsArray):TranslationRecord => {
+// const createDefaultRecord = (record:Record<string,unknown>, model:Model, items:FieldsArray):TranslationRecord => {
 
-  const defaultRecord = {
-    id: record.id,
-    itemType: model.id,
-    modelName: model.name,
-    hint: model.hint || '',
-  } as TranslationRecord
+//   const defaultRecord = {
+//     id: record.id,
+//     itemType: model.id,
+//     modelName: model.name,
+//     hint: model.hint || '',
+//   } as TranslationRecord
 
-  if(items.length > 0){
-    defaultRecord.fields = items;
-  }
-  return defaultRecord;
-};
+//   if(items.length > 0){
+//     defaultRecord.fields = items;
+//   }
+//   return defaultRecord;
+// };
 
 /**
  * @desc Helper function to create an asset record.
@@ -471,12 +471,12 @@ const createDefaultRecord = (record:Record<string,unknown>, model:Model, items:F
  * @param {items} Optional init items
  * @return {object} { id: "434344", itemType: "123456", fields: []}
  */
-export const constructDefaultAssetRecord = (record:Record<string,unknown>, items:TranslationField[]):TranslationRecord => {
-  return {
-    id: record.id,
-    // Assets dont have itemType (model id), using this to differentiate records from assets
-    itemType: ItemTypes.Media,
-    modelName: '',
-    fields: items && items.length > 0 ? items : [],
-  } as TranslationRecord
-};
+// export const constructDefaultAssetRecord = (record:Record<string,unknown>, items:TranslationField[]):TranslationRecord => {
+//   return {
+//     id: record.id,
+//     // Assets dont have itemType (model id), using this to differentiate records from assets
+//     itemType: ItemTypes.Media,
+//     modelName: '',
+//     fields: items && items.length > 0 ? items : [],
+//   } as TranslationRecord
+// };

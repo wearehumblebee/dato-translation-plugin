@@ -23,7 +23,7 @@ export const isImportInvalid = (file: TranslationData | undefined, sourceLang:st
 
   if(!file){
     return  {
-      type: 'warning',
+      type: 'alert',
       message:`You have to provide a translation file`,
     }
   }
@@ -55,7 +55,8 @@ export const isImportInvalid = (file: TranslationData | undefined, sourceLang:st
 }
 
 /**
- -* @desc Some strings should not be sent for translation. Links and strings with specific values (dropdown in Dato) cant be translated
+ * @desc Some strings should not be sent for translation. Links and strings with specific values (dropdown in Dato) cant be translated
+ * The param value is already validated by Dato field type to be of type string so no further type checking should be required.
  * @param field
  * @param value
  * @returns {boolean}
@@ -73,12 +74,13 @@ export const isImportInvalid = (file: TranslationData | undefined, sourceLang:st
 }
 
 /**
- * @desc Check if value string is a url, typically we don´t want to translate url:s
+ * @desc Check if value string is a url, typically we don´t want to translate url:s.
+ * Pretty week validation would regard /hello and welcome as a link
  * @param {string} value
  * @return {boolean}
  */
 
- export const isLinkUrl = (value:string): boolean => {
+ const isLinkUrl = (value:string): boolean => {
   if (typeof value === 'string') {
     if (value?.startsWith('/') || value?.startsWith('http')) {
       return true;

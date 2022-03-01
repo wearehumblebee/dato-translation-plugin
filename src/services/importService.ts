@@ -117,8 +117,12 @@ export const mergeModularBlocks = ( mergedTranslations:UpdateRecordRef[], modula
     if (record) {
       const key = camelize(block.parentField.apiKey);
       const blockItems = block.item as LinkRecordRef[];
-      const preparedBlocks = blockItems.map((item) => {
-        return buildModularBlockHelper(item.data, item.meta.itemType);
+      //const preparedBlocks = blockItems.map((item) => {
+      const preparedBlocks = blockItems.filter((item) => {
+        const readyBlock = buildModularBlockHelper(item.data, item.meta.itemType);
+        if(readyBlock){
+          return readyBlock;
+        }
       });
       if (preparedBlocks?.length > 0) {
 
