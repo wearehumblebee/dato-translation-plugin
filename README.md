@@ -2,9 +2,9 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Adds two new tabs in DatoCMS in the top menu bar "Export" and "Import"
+Adds two new tabs in DatoCMS in the top menu bar; "Export" and "Import".
 
-This plugin is build using the [DatoCMS plugin-sdk](https://www.datocms.com/docs/plugin-sdk)
+This plugin is build using the [DatoCMS plugin-sdk](https://www.datocms.com/docs/plugin-sdk).
 
 ## Features
 
@@ -72,7 +72,7 @@ After the export file has been translated, all the value fields should have new 
 
 ## Export page
 
-In the settings section at the top of the page there are 3 options
+In the settings section at the top of the page there are 3 options:
 
 - Export content
 - Export assets
@@ -96,7 +96,7 @@ Select the language to use in export file. The plugin will default to first loca
 
 ## Import page
 
-In the settings section at the top of the page there are 3 options
+In the settings section at the top of the page there are 3 options:
 
 - Dry run
 - Dont create records
