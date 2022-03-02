@@ -6,6 +6,21 @@ Adds two new tabs in DatoCMS in the top menu bar; "Export" and "Import".
 
 This plugin is build using the [DatoCMS plugin-sdk](https://www.datocms.com/docs/plugin-sdk).
 
+## Development
+
+To develop this project on localhost start the project with:
+
+`npm run start`
+
+With default settings this should start up on port 3000
+
+Local:http://localhost:3000
+
+Paste this url in the plugin setting under "Entry point URL"
+
+The success of this may vary depending on the browser used.
+Firefox is 100% working. Rumors of Chrome working is circulating the internet. Safari is out of the question.
+
 ## Features
 
 - Select source language and export all content in that language from DatoCMS into a .json file
