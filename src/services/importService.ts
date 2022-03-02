@@ -721,11 +721,11 @@ const validateAndStripSEO = (record:Record<string,unknown>, field:Field, logger:
     const context = "validateAndStripSEO";
       let title = record[DatoFields.SeoTitle] as string;
       let description = record[DatoFields.SeoDescription] as string;
-      if(title.length > validators.titleLength.max){
+      if(title?.length > validators.titleLength.max){
         title = title.slice(0,validators.titleLength.max);
         logger.log({context, type:LogType.Other, status:LogStatus.Warning, description:"Truncated SEO title", item:record});
       }
-      if(description.length > validators.descriptionLength.max){
+      if(description?.length > validators.descriptionLength.max){
         description = title.slice(0,validators.titleLength.max);
         logger.log({context, type:LogType.Other, status:LogStatus.Warning, description:"Truncated SEO description", item:record});
       }
