@@ -5,7 +5,7 @@
   "scripts": {
     "start": "cross-env BROWSER='none' PUBLIC_URL='/' react-scripts start",
     "build": "cross-env PUBLIC_URL='.' react-scripts build",
-    "test": "jest",
+    "test": "jest --coverage --env=node",
     "eject": "react-scripts eject",
     "prepublishOnly": "npm run build"
   },

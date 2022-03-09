@@ -8,7 +8,6 @@ import { parseRecords, parseAssets,formatFileResult } from "../../services/expor
 import { downloadFile } from '../../helpers/fileHandling';
 import { isExportFileValid } from '../../validation/validate';
 import Locales from "../../components/Locales";
-import LocaleSelector from '../../components/LocaleSelector';
 import ExportSummaryTable from '../../components/ExportSummaryTable';
 import s from './styles.module.css';
 import {
