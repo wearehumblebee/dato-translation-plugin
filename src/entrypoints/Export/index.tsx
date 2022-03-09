@@ -8,7 +8,6 @@ import { parseRecords, parseAssets,formatFileResult } from "../../services/expor
 import { downloadFile } from '../../helpers/fileHandling';
 import { isExportFileValid } from '../../validation/validate';
 import Locales from "../../components/Locales";
-import LocaleSelector from '../../components/LocaleSelector';
 import ExportSummaryTable from '../../components/ExportSummaryTable';
 import s from './styles.module.css';
 import {
@@ -145,7 +144,6 @@ export default function Export({ ctx }: PropTypes) {
                 <SwitchField id="exportContent" name="exportContent" label="Export content" hint="" onChange={updateSettings.bind(null, 'exportContent')} value={settings.exportContent} />
                 <SwitchField id="exportAssets" name="exportAssets" label="Export assets" hint="" onChange={updateSettings.bind(null, 'exportAssets')} value={settings.exportAssets} />
                 <SwitchField id="exportOnlyPublishedRecords" name="exportOnlyPublishedRecords" label="Export only published" hint="" onChange={updateSettings.bind(null, 'exportOnlyPublishedRecords')} value={settings.exportOnlyPublishedRecords} />
-                <LocaleSelector locales={ctx.site.attributes.locales} changeLocale={changeLang} label="Select source language" keyPrefix='source-locale' selectedLocale={sourceLocale}/>
               </div>
               <Locales sourceLocale={sourceLocale} locales={ctx.site.attributes.locales} changeSourceLocale={changeLang} selectedSourceLocale={sourceLocale}/>
 
